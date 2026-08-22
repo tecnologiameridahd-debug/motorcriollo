@@ -91,6 +91,14 @@ main {
 .btn-danger:hover { background: #9d0f19; }
 .btn-block { display: block; width: 100%; text-align: center; }
 
+.prose { max-width: 740px; margin: 0 auto; }
+.prose h1 { font-size: 28px; margin-bottom: 4px; }
+.prose h2 { font-size: 19px; margin-top: 32px; color: var(--green-dark); }
+.prose p, .prose li { color: var(--text); }
+.prose ul { padding-left: 20px; }
+.prose li { margin-bottom: 6px; }
+.legal-meta { color: var(--muted); font-size: 13px; margin-top: 0; }
+
 .hero {
   background: linear-gradient(135deg, var(--green-dark), var(--green));
   color: #fff;

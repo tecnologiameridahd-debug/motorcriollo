@@ -433,6 +433,16 @@ def login_post(request: Request, email: str = Form(...), password: str = Form(..
     return _set_session(resp, token)
 
 
+@app.get("/terminos", response_class=HTMLResponse)
+def terminos(request: Request):
+    return _page(request, "terminos.html")
+
+
+@app.get("/privacidad", response_class=HTMLResponse)
+def privacidad(request: Request):
+    return _page(request, "privacidad.html")
+
+
 @app.get("/salir")
 def salir(request: Request):
     delete_session(request.cookies.get(SESSION_COOKIE))
