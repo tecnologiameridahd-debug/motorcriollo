@@ -187,7 +187,7 @@ def _finish_oauth(request: Request, user: dict, is_new: bool = False):
 
 # --------------------------------------------------------------- browse ----
 
-@app.get("/", response_class=HTMLResponse)
+@app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def home(
     request: Request,
     q: str = "",
@@ -583,7 +583,7 @@ def eliminar_cuenta(request: Request):
     return resp
 
 
-@app.get("/api/health")
+@app.api_route("/api/health", methods=["GET", "HEAD"])
 def health():
     from db import backend_name
 
