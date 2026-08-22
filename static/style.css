@@ -39,13 +39,18 @@ img { max-width: 100%; display: block; }
 }
 
 .brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   font-size: 20px;
   font-weight: 800;
   color: var(--green-dark) !important;
   text-decoration: none !important;
 }
+.brand-mark { border-radius: 8px; flex: none; }
+.brand-word { letter-spacing: -0.01em; }
 .brand-motor { color: var(--green-dark); }
-.brand-criollo { color: var(--accent); }
+.brand-criollo { color: #d99400; }
 
 .nav { display: flex; align-items: center; gap: 14px; font-size: 14px; }
 .nav a { color: var(--text); }
