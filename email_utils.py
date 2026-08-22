@@ -6,7 +6,7 @@ import os
 import requests
 
 SITE = (
-    os.environ.get("MOTORCRIOLLO_PUBLIC_URL") or "https://www.motorcriollo.com"
+    os.environ.get("MOTORCRIOLLO_PUBLIC_URL") or "https://www.motorcriollo.store"
 ).rstrip("/")
 LOGO = f"{SITE}/static/logo-512.jpg"
 _BG = "#0b0f0a"
@@ -26,7 +26,7 @@ def sendgrid_api_key() -> str:
 
 def from_email() -> str:
     # Por defecto el From ya verificado en SendGrid (CoachRadar).
-    # motorcriollo.com aún no está autenticado: si se usa, SendGrid rechaza el envío.
+    # motorcriollo.store aún no está autenticado: si se usa, SendGrid rechaza el envío.
     return (
         os.environ.get("SENDGRID_FROM_EMAIL") or "noreply@coachradar.fit"
     ).strip()
@@ -37,7 +37,7 @@ def from_name() -> str:
 
 
 def reply_to() -> str:
-    return (os.environ.get("SENDGRID_REPLY_TO") or "soporte@motorcriollo.com").strip()
+    return (os.environ.get("SENDGRID_REPLY_TO") or "soporte@motorcriollo.store").strip()
 
 
 def fallback_from() -> str:
@@ -86,7 +86,7 @@ def _html(heading: str, paragraphs: list[str], btn: str, url: str) -> str:
 <a href="{url}" style="display:inline-block;background:{_GREEN};color:{_ON};font-weight:700;text-decoration:none;padding:12px 22px;border-radius:999px">{btn}</a>
 </td></tr>
 <tr><td style="padding:16px 28px;border-top:1px solid rgba(255,255,255,.08)">
-<p style="margin:0;color:#9db296;font-size:12px;text-align:center">MotorCriollo · motorcriollo.com</p>
+<p style="margin:0;color:#9db296;font-size:12px;text-align:center">MotorCriollo · motorcriollo.store</p>
 </td></tr>
 </table></td></tr></table>
 </body></html>"""

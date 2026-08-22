@@ -16,7 +16,7 @@ El plan **Free** de Render se duerme a los ~15 min sin visitas. La primera petic
 Para que no se duerma: en [cron-job.org](https://cron-job.org) (gratis) crea un GET cada 10 min a:
 
 ```text
-https://motorcriollo.com/api/health
+https://motorcriollo.store/api/health
 ```
 
 ## 1. Código
@@ -51,18 +51,18 @@ URL del servicio (ejemplo):
 https://motorcriollo.onrender.com
 ```
 
-## 2b. Dominio `motorcriollo.com` (Namecheap → MotorCriollo)
+## 2b. Dominio `motorcriollo.store` (Namecheap → MotorCriollo)
 
 Cuando compres el dominio, apúntalo al servicio **MotorCriollo**.
 
 **En Render** (servicio MotorCriollo):
 
 1. Settings → **Custom Domains** → Add
-2. Agrega `www.motorcriollo.com`
-3. Agrega `motorcriollo.com`
+2. Agrega `www.motorcriollo.store`
+3. Agrega `motorcriollo.store`
 4. Copia el hostname de tu servicio, tipo `motorcriollo-xxxx.onrender.com`
 
-**En Namecheap** → Domain List → `motorcriollo.com` → **Advanced DNS**
+**En Namecheap** → Domain List → `motorcriollo.store` → **Advanced DNS**
 
 Borra los registros de parking (URL Redirect, CNAME a `parkingpage.namecheap.com`, A raros).
 
@@ -77,10 +77,10 @@ Si hay un registro **AAAA**, bórralo.
 
 Espera 5–30 min. Render pone el HTTPS (candado). La web queda:
 
-- https://www.motorcriollo.com
-- https://motorcriollo.com
+- https://www.motorcriollo.store
+- https://motorcriollo.store
 
-Comprueba: https://www.motorcriollo.com/api/health
+Comprueba: https://www.motorcriollo.store/api/health
 
 ## 3. Disco en el Web Service de $7 (recomendado)
 
@@ -117,14 +117,14 @@ debe decir `"backend":"postgres"` y `"persistent":true`.
 En MotorCriollo → Environment pega:
 
 - `SENDGRID_API_KEY` = tu `SG.…`
-- `SENDGRID_FROM_EMAIL` = `soporte@motorcriollo.com`
-- `SENDGRID_REPLY_TO` = `soporte@motorcriollo.com`
+- `SENDGRID_FROM_EMAIL` = `soporte@motorcriollo.store`
+- `SENDGRID_REPLY_TO` = `soporte@motorcriollo.store`
 
-En SendGrid: **Sender Authentication** → autentica el dominio `motorcriollo.com` (o un Single Sender con ese correo). Si el From no está verificado, el correo no sale.
+En SendGrid: **Sender Authentication** → autentica el dominio `motorcriollo.store` (o un Single Sender con ese correo). Si el From no está verificado, el correo no sale.
 
 Al registrarse con email se envía un enlace de confirmación. También hay "Olvidé mi contraseña" y notificación al vendedor cuando un comprador escribe. Google/Apple no necesitan ese correo.
 
-Comprueba: `https://www.motorcriollo.com/api/health` → `"email":{"configured":true}`
+Comprueba: `https://www.motorcriollo.store/api/health` → `"email":{"configured":true}`
 
 ## 5. Gmail / Apple (después)
 

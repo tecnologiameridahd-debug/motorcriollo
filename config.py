@@ -19,7 +19,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "")
 PERSISTENT = bool(DATABASE_URL or DATA_ROOT)
 PUBLIC_BASE_URL = os.environ.get("MOTORCRIOLLO_PUBLIC_URL", "").rstrip("/")
 if not PUBLIC_BASE_URL and os.environ.get("RENDER"):
-    PUBLIC_BASE_URL = "https://www.motorcriollo.com"
+    PUBLIC_BASE_URL = "https://www.motorcriollo.store"
 SECRET = os.environ.get("MOTORCRIOLLO_SECRET", "motorcriollo-dev-cambia-esto")
 ADMIN_PASSWORD = (
     os.environ.get("MOTORCRIOLLO_ADMIN") or os.environ.get("ADMIN_PASSWORD") or ""
