@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Recuperar contraseña — MotorCriollo{% endblock %}
+{% block content %}
+<div class="auth-card">
+  <h1>Recuperar contraseña</h1>
+  {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+  {% if sent %}
+  <div class="alert alert-ok">Si el correo existe, te enviamos un enlace para elegir una nueva contraseña.</div>
+  {% else %}
+  <form class="stack" method="post" action="/olvide">
+    <div class="field">
+      <label>Correo</label>
+      <input type="email" name="email" required />
+    </div>
+    <button class="btn btn-block" type="submit">Enviar enlace</button>
+  </form>
+  {% endif %}
+  <p style="margin-top:14px;font-size:14px"><a href="/login">Volver a entrar</a></p>
+</div>
+{% endblock %}

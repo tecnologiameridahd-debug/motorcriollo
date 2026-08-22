@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Entrar — MotorCriollo{% endblock %}
+{% block content %}
+<div class="auth-card">
+  <h1>Entrar</h1>
+  {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+  {% if info == 'ok' %}<div class="alert alert-ok">Contraseña actualizada. Ya puedes entrar.</div>{% endif %}
+
+  <div class="oauth-row">
+    <a class="btn btn-ghost btn-block" href="/auth/google">Continuar con Google{% if not google_ok %} (falta configurar){% endif %}</a>
+    <a class="btn btn-ghost btn-block" href="/auth/apple">Continuar con Apple{% if not apple_ok %} (falta configurar){% endif %}</a>
+  </div>
+  <div class="divider">o con tu correo</div>
+
+  <form class="stack" method="post" action="/login">
+    <input type="hidden" name="next" value="{{ next or '' }}" />
+    <div class="field">
+      <label>Correo</label>
+      <input type="email" name="email" required />
+    </div>
+    <div class="field">
+      <label>Contraseña</label>
+      <input type="password" name="password" required />
+    </div>
+    <button class="btn btn-block" type="submit">Entrar</button>
+  </form>
+  <p style="margin-top:14px;font-size:14px">
+    <a href="/olvide">¿Olvidaste tu contraseña?</a>
+  </p>
+  <p style="font-size:14px">¿No tienes cuenta? <a href="/registro">Crea una</a></p>
+</div>
+{% endblock %}

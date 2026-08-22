@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}{{ listing.title }} — MotorCriollo{% endblock %}
+{% block content %}
+<div class="detail">
+  <div>
+    <div class="gallery-main">
+      {% if listing.photos %}
+      <img id="mainPhoto" src="{{ listing.photos[0] }}" alt="{{ listing.title }}" />
+      {% else %}
+      <img id="mainPhoto" src="" alt="" style="display:none" />
+      {% endif %}
+    </div>
+    {% if listing.photos|length > 1 %}
+    <div class="gallery-thumbs">
+      {% for p in listing.photos %}
+      <img src="{{ p }}" class="{% if loop.first %}on{% endif %}" onclick="document.getElementById('mainPhoto').src=this.src; document.querySelectorAll('.gallery-thumbs img').forEach(function(i){i.classList.remove('on')}); this.classList.add('on');" />
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <h1 style="margin-top:20px">{{ listing.title }}</h1>
+    <div class="desc">{{ listing.description or "Sin descripción adicional." }}</div>
+  </div>
+
+  <div class="detail-side">
+    <div class="detail-price">${{ "{:,}".format(listing.price) }}</div>
+    <div class="detail-title">{{ listing.brand }} {{ listing.model }} {{ listing.year }}</div>
+    {% if listing.status == 'sold' %}<span class="status-pill status-sold">VENDIDO</span>{% endif %}
+
+    <ul class="spec-list">
+      <li><span>Año</span><span>{{ listing.year }}</span></li>
+      <li><span>Kilometraje</span><span>{{ "{:,}".format(listing.mileage) }} mi</span></li>
+      <li><span>Transmisión</span><span>{{ listing.transmission or "—" }}</span></li>
+      <li><span>Combustible</span><span>{{ listing.fuel_type or "—" }}</span></li>
+      <li><span>Condición</span><span>{{ listing.condition or "—" }}</span></li>
+      <li><span>Ubicación</span><span>{{ listing.city }}{% if listing.state %}, {{ listing.state }}{% endif %}</span></li>
+    </ul>
+
+    <div class="seller-box">
+      <div class="seller-name">{{ seller.name if seller else "Vendedor" }}</div>
+      {% if listing.phone %}
+      <p style="margin:6px 0"><a class="btn btn-block" href="https://wa.me/{{ listing.phone|replace(' ', '')|replace('+', '')|replace('-', '') }}" target="_blank" rel="noopener">Contactar por WhatsApp</a></p>
+      <p style="margin:6px 0;color:var(--muted);font-size:13px">Tel: {{ listing.phone }}</p>
+      {% endif %}
+    </div>
+
+    {% if sent %}
+    <div class="alert alert-ok" style="margin-top:16px">Tu mensaje fue enviado al vendedor.</div>
+    {% else %}
+    <form method="post" action="/listing/{{ listing.id }}/contactar" class="stack" style="margin-top:16px">
+      {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+      <div class="field">
+        <label>Tu nombre</label>
+        <input type="text" name="buyer_name" required maxlength="60" value="{{ me.name if me else '' }}" />
+      </div>
+      <div class="field">
+        <label>Tu correo (opcional)</label>
+        <input type="email" name="buyer_email" maxlength="120" value="{{ me.email if me else '' }}" />
+      </div>
+      <div class="field">
+        <label>Tu teléfono (opcional)</label>
+        <input type="text" name="buyer_phone" maxlength="30" value="{{ me.phone if me else '' }}" />
+      </div>
+      <div class="field">
+        <label>Mensaje</label>
+        <textarea name="message" required maxlength="1000" placeholder="Hola, ¿sigue disponible el carro?"></textarea>
+      </div>
+      <button class="btn btn-block" type="submit">Contactar vendedor</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

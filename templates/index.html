@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}MotorCriollo — carros usados en venta{% endblock %}
+{% block content %}
+<div class="hero">
+  <h1>Encuentra tu próximo carro</h1>
+  <p>{{ total }} publicaciones activas · compra y vende directo, sin intermediarios.</p>
+</div>
+
+<div class="filters">
+  <form method="get" action="/">
+    <div class="field">
+      <label>Buscar</label>
+      <input type="text" name="q" value="{{ filters.q }}" placeholder="Marca, modelo o palabra clave" />
+    </div>
+    <div class="field">
+      <label>Marca</label>
+      <select name="brand">
+        <option value="">Todas</option>
+        {% for b in brands %}
+        <option value="{{ b }}" {% if filters.brand == b %}selected{% endif %}>{{ b }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label>Precio mín.</label>
+      <input type="number" name="price_min" value="{{ filters.price_min }}" min="0" />
+    </div>
+    <div class="field">
+      <label>Precio máx.</label>
+      <input type="number" name="price_max" value="{{ filters.price_max }}" min="0" />
+    </div>
+    <div class="field">
+      <label>Año mín.</label>
+      <input type="number" name="year_min" value="{{ filters.year_min }}" min="1950" />
+    </div>
+    <div class="field">
+      <label>Año máx.</label>
+      <input type="number" name="year_max" value="{{ filters.year_max }}" min="1950" />
+    </div>
+    <div class="field">
+      <label>Ciudad</label>
+      <input type="text" name="city" value="{{ filters.city }}" placeholder="Miami, Orlando..." />
+    </div>
+    <div class="filters-actions">
+      <button class="btn" type="submit">Buscar</button>
+      <a class="btn btn-ghost" href="/">Limpiar</a>
+    </div>
+  </form>
+</div>
+
+{% if listings %}
+<div class="grid">
+  {% for l in listings %}
+  <div class="card">
+    <a class="card-link" href="/listing/{{ l.id }}">
+      <div class="card-photo-wrap">
+        {% if l.status == 'sold' %}<span class="badge-sold">VENDIDO</span>{% endif %}
+        {% if l.photo %}
+        <img class="card-photo" src="{{ l.photo }}" alt="{{ l.title }}" />
+        {% else %}
+        <div class="card-photo"></div>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        <div class="card-price">${{ "{:,}".format(l.price) }}</div>
+        <div class="card-title">{{ l.title }}</div>
+        <div class="card-meta">{{ l.year }} · {{ "{:,}".format(l.mileage) }} mi · {{ l.city }}{% if l.state %}, {{ l.state }}{% endif %}</div>
+      </div>
+    </a>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty">
+  <p>No hay publicaciones que coincidan con tu búsqueda.</p>
+  <a class="btn" href="/">Ver todas</a>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}{% if listing %}Editar publicación{% else %}Publicar un carro{% endif %} — MotorCriollo{% endblock %}
+{% block content %}
+<h1 class="page-title">{% if listing %}Editar publicación{% else %}Publicar un carro{% endif %}</h1>
+
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+<form class="stack wide" method="post" action="{% if listing %}/listing/{{ listing.id }}/editar{% else %}/publicar{% endif %}" enctype="multipart/form-data">
+  <div class="field">
+    <label>Título del anuncio</label>
+    <input type="text" name="title" required maxlength="120" value="{{ listing.title if listing else '' }}" placeholder="Ej: Toyota Corolla 2019 — único dueño" />
+  </div>
+
+  <div class="field-row">
+    <div class="field">
+      <label>Marca</label>
+      <select name="brand" required>
+        {% for b in brands %}
+        <option value="{{ b }}" {% if listing and listing.brand == b %}selected{% endif %}>{{ b }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label>Modelo</label>
+      <input type="text" name="model" required maxlength="60" value="{{ listing.model if listing else '' }}" />
+    </div>
+    <div class="field">
+      <label>Año</label>
+      <input type="number" name="year" required min="1950" max="2027" value="{{ listing.year if listing else '' }}" />
+    </div>
+  </div>
+
+  <div class="field-row">
+    <div class="field">
+      <label>Precio (USD)</label>
+      <input type="number" name="price" required min="0" value="{{ listing.price if listing else '' }}" />
+    </div>
+    <div class="field">
+      <label>Kilometraje (mi)</label>
+      <input type="number" name="mileage" min="0" value="{{ listing.mileage if listing else 0 }}" />
+    </div>
+  </div>
+
+  <div class="field-row">
+    <div class="field">
+      <label>Transmisión</label>
+      <select name="transmission">
+        <option value="">—</option>
+        {% for t in transmissions %}
+        <option value="{{ t }}" {% if listing and listing.transmission == t %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label>Combustible</label>
+      <select name="fuel_type">
+        <option value="">—</option>
+        {% for f in fuel_types %}
+        <option value="{{ f }}" {% if listing and listing.fuel_type == f %}selected{% endif %}>{{ f }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label>Condición</label>
+      <select name="condition">
+        <option value="">—</option>
+        {% for c in conditions %}
+        <option value="{{ c }}" {% if listing and listing.condition == c %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <div class="field-row">
+    <div class="field">
+      <label>Ciudad</label>
+      <input type="text" name="city" maxlength="60" value="{{ listing.city if listing else '' }}" />
+    </div>
+    <div class="field">
+      <label>Estado</label>
+      <input type="text" name="state" maxlength="60" value="{{ listing.state if listing else '' }}" />
+    </div>
+    <div class="field">
+      <label>Teléfono / WhatsApp</label>
+      <input type="text" name="phone" maxlength="30" value="{{ listing.phone if listing else (me.phone if me else '') }}" placeholder="+1 305 555 0100" />
+    </div>
+  </div>
+
+  <div class="field">
+    <label>Descripción</label>
+    <textarea name="description" maxlength="2000" placeholder="Estado del carro, historial, motivo de venta...">{{ listing.description if listing else '' }}</textarea>
+  </div>
+
+  <div class="field">
+    <label>Fotos {% if listing and listing.photos %}(se agregarán a las existentes){% endif %}</label>
+    <input type="file" name="photos" accept="image/*" multiple />
+  </div>
+
+  <button class="btn" type="submit">{% if listing %}Guardar cambios{% else %}Publicar anuncio{% endif %}</button>
+</form>
+{% endblock %}

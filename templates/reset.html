@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Nueva contraseña — MotorCriollo{% endblock %}
+{% block content %}
+<div class="auth-card">
+  <h1>Elige una nueva contraseña</h1>
+  {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+  <form class="stack" method="post" action="/reset">
+    <input type="hidden" name="token" value="{{ token }}" />
+    <div class="field">
+      <label>Nueva contraseña</label>
+      <input type="password" name="password" required minlength="4" />
+    </div>
+    <button class="btn btn-block" type="submit">Guardar contraseña</button>
+  </form>
+</div>
+{% endblock %}

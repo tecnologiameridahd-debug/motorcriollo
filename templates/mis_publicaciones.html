@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Mis publicaciones — MotorCriollo{% endblock %}
+{% block content %}
+<h1 class="page-title">Mis publicaciones</h1>
+<p><a class="btn" href="/publicar">+ Publicar otro carro</a></p>
+
+{% if listings %}
+<table class="mylist">
+  <thead>
+    <tr><th></th><th>Título</th><th>Precio</th><th>Estado</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for l in listings %}
+    <tr>
+      <td>{% if l.photo %}<img src="{{ l.photo }}" alt="" />{% endif %}</td>
+      <td><a href="/listing/{{ l.id }}">{{ l.title }}</a></td>
+      <td>${{ "{:,}".format(l.price) }}</td>
+      <td>
+        <span class="status-pill status-{{ l.status }}">
+          {% if l.status == 'active' %}Activo{% elif l.status == 'sold' %}Vendido{% else %}Pausado{% endif %}
+        </span>
+      </td>
+      <td class="row-actions">
+        <a class="btn btn-ghost btn-sm" href="/listing/{{ l.id }}/editar">Editar</a>
+        {% if l.status != 'sold' %}
+        <form method="post" action="/listing/{{ l.id }}/estado"><input type="hidden" name="status" value="sold" /><button class="btn btn-ghost btn-sm" type="submit">Marcar vendido</button></form>
+        {% else %}
+        <form method="post" action="/listing/{{ l.id }}/estado"><input type="hidden" name="status" value="active" /><button class="btn btn-ghost btn-sm" type="submit">Reactivar</button></form>
+        {% endif %}
+        <form method="post" action="/listing/{{ l.id }}/eliminar" onsubmit="return confirm('¿Eliminar esta publicación?')"><button class="btn btn-danger btn-sm" type="submit">Eliminar</button></form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty">
+  <p>Todavía no tienes publicaciones.</p>
+  <a class="btn" href="/publicar">Publica tu primer carro</a>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+config_local.py
+data/*.db
+data/*.db-wal
+data/*.db-shm
+static/uploads/*
+!static/uploads/.gitkeep
+.DS_Store
+*.p8

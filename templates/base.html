@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#1f8a4c" />
+<title>{% block title %}MotorCriollo{% endblock %}</title>
+<meta name="description" content="Compra y vende carros usados cerca de ti." />
+<link rel="stylesheet" href="/static/style.css?v=1" />
+{% block extra_head %}{% endblock %}
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/"><span class="brand-motor">Motor</span><span class="brand-criollo">Criollo</span></a>
+  <nav class="nav">
+    {% if me %}
+      <a href="/publicar">Publicar</a>
+      <a href="/mis-publicaciones">Mis publicaciones</a>
+      <a href="/salir" class="btn btn-ghost btn-sm">Salir</a>
+    {% else %}
+      <a href="/login">Entrar</a>
+      <a class="btn btn-sm" href="/registro">Crear cuenta</a>
+    {% endif %}
+  </nav>
+</header>
+<main>
+  {% block content %}{% endblock %}
+</main>
+<footer class="foot">
+  <span>MotorCriollo · compra y vende carros cerca de ti</span>
+  <nav class="foot-links">
+    <a href="/">Explorar</a>
+    <a href="/publicar">Vender un carro</a>
+  </nav>
+</footer>
+</body>
+</html>

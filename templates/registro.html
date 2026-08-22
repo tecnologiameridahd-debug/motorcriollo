@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Crear cuenta — MotorCriollo{% endblock %}
+{% block content %}
+<div class="auth-card">
+  <h1>Crear cuenta</h1>
+  {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+  <div class="oauth-row">
+    <a class="btn btn-ghost btn-block" href="/auth/google">Continuar con Google{% if not google_ok %} (falta configurar){% endif %}</a>
+    <a class="btn btn-ghost btn-block" href="/auth/apple">Continuar con Apple{% if not apple_ok %} (falta configurar){% endif %}</a>
+  </div>
+  <div class="divider">o con tu correo</div>
+
+  <form class="stack" method="post" action="/registro">
+    <div class="field">
+      <label>Nombre</label>
+      <input type="text" name="name" required maxlength="60" />
+    </div>
+    <div class="field">
+      <label>Correo</label>
+      <input type="email" name="email" required />
+    </div>
+    <div class="field">
+      <label>Contraseña</label>
+      <input type="password" name="password" required minlength="4" />
+    </div>
+    <div class="field">
+      <label>Teléfono / WhatsApp (opcional)</label>
+      <input type="text" name="phone" maxlength="30" placeholder="+1 305 555 0100" />
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Ciudad</label>
+        <input type="text" name="city" maxlength="60" />
+      </div>
+      <div class="field">
+        <label>Estado</label>
+        <input type="text" name="state" maxlength="60" />
+      </div>
+    </div>
+    <button class="btn btn-block" type="submit">Crear cuenta</button>
+  </form>
+  <p style="margin-top:14px;font-size:14px">¿Ya tienes cuenta? <a href="/login">Entra aquí</a></p>
+</div>
+{% endblock %}
