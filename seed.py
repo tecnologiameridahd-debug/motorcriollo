@@ -9,16 +9,19 @@ from storage import (
     browse_listings,
     create_listing,
     create_user,
+    delete_listing,
+    delete_user,
     get_user_by_email,
     init_db,
     list_listing_photos,
+    list_user_listings,
 )
 
 DEMO_USERS = [
-    {"email": "carlos@demo.motorcriollo", "name": "Carlos Peña", "phone": "+1 305 555 0101", "city": "Miami", "state": "FL"},
-    {"email": "maria@demo.motorcriollo", "name": "María Gómez", "phone": "+1 786 555 0102", "city": "Orlando", "state": "FL"},
-    {"email": "jose@demo.motorcriollo", "name": "José Ramírez", "phone": "+1 407 555 0103", "city": "Tampa", "state": "FL"},
-    {"email": "lucia@demo.motorcriollo", "name": "Lucía Fernández", "phone": "+1 954 555 0104", "city": "Fort Lauderdale", "state": "FL"},
+    {"email": "carlos@demo.motorcriollo", "name": "Carlos Peña", "phone": "+58 412 555 0101", "city": "Caracas", "state": "Distrito Capital"},
+    {"email": "maria@demo.motorcriollo", "name": "María Gómez", "phone": "+58 414 555 0102", "city": "Maracaibo", "state": "Zulia"},
+    {"email": "jose@demo.motorcriollo", "name": "José Ramírez", "phone": "+58 424 555 0103", "city": "Valencia", "state": "Carabobo"},
+    {"email": "lucia@demo.motorcriollo", "name": "Lucía Fernández", "phone": "+58 416 555 0104", "city": "Maracay", "state": "Aragua"},
 ]
 
 LISTINGS = [
@@ -30,7 +33,7 @@ LISTINGS = [
         "condition": "Usado - excelente",
         "description": "Corolla 2019 en excelente estado, mantenimientos al día, sin choques, "
                         "aire frío, todo original. Listo para traspaso.",
-        "city": "Miami", "state": "FL", "color": "#e63946",
+        "city": "Caracas", "state": "Distrito Capital", "color": "#e63946",
     },
     {
         "owner": "carlos@demo.motorcriollo",
@@ -40,7 +43,7 @@ LISTINGS = [
         "condition": "Usado - excelente",
         "description": "CR-V 2021, cámara de reversa, apple carplay, techo panorámico. "
                         "Cero detalles mecánicos.",
-        "city": "Miami", "state": "FL", "color": "#457b9d",
+        "city": "Caracas", "state": "Distrito Capital", "color": "#457b9d",
     },
     {
         "owner": "maria@demo.motorcriollo",
@@ -50,7 +53,7 @@ LISTINGS = [
         "condition": "Usado - bueno",
         "description": "Sentra 2017 ideal para uso diario o Uber/Lyft. Bajo consumo, "
                         "llantas nuevas, batería nueva.",
-        "city": "Orlando", "state": "FL", "color": "#2a9d8f",
+        "city": "Maracaibo", "state": "Zulia", "color": "#2a9d8f",
     },
     {
         "owner": "maria@demo.motorcriollo",
@@ -60,7 +63,7 @@ LISTINGS = [
         "condition": "Usado - excelente",
         "description": "Silverado 2020 doble cabina, 4x4, gancho de arrastre, para trabajo o "
                         "familia grande.",
-        "city": "Orlando", "state": "FL", "color": "#e76f51",
+        "city": "Maracaibo", "state": "Zulia", "color": "#e76f51",
     },
     {
         "owner": "jose@demo.motorcriollo",
@@ -70,7 +73,7 @@ LISTINGS = [
         "condition": "Usado - excelente",
         "description": "Elantra 2022 prácticamente nuevo, garantía de fábrica vigente, "
                         "un solo dueño, no fumador.",
-        "city": "Tampa", "state": "FL", "color": "#264653",
+        "city": "Valencia", "state": "Carabobo", "color": "#264653",
     },
     {
         "owner": "jose@demo.motorcriollo",
@@ -80,7 +83,7 @@ LISTINGS = [
         "condition": "Usado - excelente",
         "description": "Mustang GT V8, sonido de escape deportivo, interior en piel, "
                         "impecable. Solo compradores serios.",
-        "city": "Tampa", "state": "FL", "color": "#1d3557",
+        "city": "Valencia", "state": "Carabobo", "color": "#1d3557",
     },
     {
         "owner": "lucia@demo.motorcriollo",
@@ -90,7 +93,7 @@ LISTINGS = [
         "condition": "Usado - bueno",
         "description": "Sportage 2020, espaciosa, ideal familia, aire y calefacción "
                         "funcionando perfecto, título limpio.",
-        "city": "Fort Lauderdale", "state": "FL", "color": "#f4a261",
+        "city": "Maracay", "state": "Aragua", "color": "#f4a261",
     },
     {
         "owner": "lucia@demo.motorcriollo",
@@ -100,7 +103,7 @@ LISTINGS = [
         "condition": "Usado - excelente",
         "description": "Model 3 con autopilot, batería con gran autonomía, cero "
                         "mantenimiento de motor. Carga rápida incluida.",
-        "city": "Fort Lauderdale", "state": "FL", "color": "#6d597a",
+        "city": "Maracay", "state": "Aragua", "color": "#6d597a",
     },
     {
         "owner": "maria@demo.motorcriollo",
@@ -110,7 +113,7 @@ LISTINGS = [
         "condition": "Usado - regular",
         "description": "Jetta 2016 funcional, motor y transmisión en buen estado, "
                         "algunos detalles estéticos. Precio negociable.",
-        "city": "Orlando", "state": "FL", "color": "#3a5a40",
+        "city": "Maracaibo", "state": "Zulia", "color": "#3a5a40",
     },
     {
         "owner": "jose@demo.motorcriollo",
@@ -120,7 +123,7 @@ LISTINGS = [
         "condition": "Usado - excelente",
         "description": "Wrangler Sahara 4x4, techo removible, perfecto para playa y "
                         "aventura. Mantenimientos al día.",
-        "city": "Tampa", "state": "FL", "color": "#606c38",
+        "city": "Valencia", "state": "Carabobo", "color": "#606c38",
     },
 ]
 
@@ -144,8 +147,23 @@ def _ensure_photo(slug: str, color: str, label: str) -> str:
     return f"/static/demo/{fname}"
 
 
+def _clear_stale_demo() -> None:
+    """Elimina la data demo de una versión anterior (ej. ciudades de EE.UU.) para poder resembrar."""
+    for u in DEMO_USERS:
+        existing = get_user_by_email(u["email"])
+        if not existing:
+            continue
+        uid = existing["id"] if not isinstance(existing, dict) else existing.get("id")
+        if existing["city"] == u["city"]:
+            continue
+        for listing in list_user_listings(uid):
+            delete_listing(listing["id"])
+        delete_user(uid)
+
+
 def seed() -> int:
     init_db()
+    _clear_stale_demo()
     if browse_listings(limit=1):
         return 0
 
