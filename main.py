@@ -54,6 +54,7 @@ from storage import (
     get_user,
     get_user_by_email,
     init_db,
+    list_seller_messages,
     list_user_listings,
     login,
     make_email_token,
@@ -382,6 +383,21 @@ def mis_publicaciones(request: Request):
         return RedirectResponse("/login?next=/mis-publicaciones", status_code=302)
     listings = list_user_listings(user["id"])
     return _page(request, "mis_publicaciones.html", listings=listings)
+
+
+@app.get("/mensajes", response_class=HTMLResponse)
+def mensajes(request: Request):
+    user = me(request)
+    if not user:
+        return RedirectResponse("/login?next=/mensajes", status_code=302)
+    msgs = list_seller_messages(user["id"])
+    listing_cache: dict[int, dict] = {}
+    for m in msgs:
+        lid = m["listing_id"]
+        if lid not in listing_cache:
+            listing_cache[lid] = get_listing(lid)
+        m["listing"] = listing_cache[lid]
+    return _page(request, "mensajes.html", messages=msgs)
 
 
 # --------------------------------------------------------------- auth ----

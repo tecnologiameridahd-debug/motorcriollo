@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Mensajes — MotorCriollo{% endblock %}
+{% block content %}
+<h1 class="page-title">Mensajes</h1>
+
+{% if messages %}
+<div class="msg-list">
+  {% for m in messages %}
+  <div class="msg-card">
+    <div class="msg-head">
+      <div>
+        <span class="msg-buyer">{{ m.buyer_name }}</span>
+        <span class="msg-date">{{ m.created_at[:16].replace('T', ' ') }}</span>
+      </div>
+      {% if m.listing %}
+      <a class="msg-listing" href="/listing/{{ m.listing.id }}">{{ m.listing.title }}</a>
+      {% endif %}
+    </div>
+    <p class="msg-body">{{ m.message }}</p>
+    <div class="msg-actions">
+      {% if m.buyer_phone %}
+      <a class="btn btn-sm" href="https://wa.me/{{ m.buyer_phone|replace(' ', '')|replace('+', '')|replace('-', '') }}" target="_blank" rel="noopener">Responder por WhatsApp</a>
+      {% endif %}
+      {% if m.buyer_email %}
+      <a class="btn btn-ghost btn-sm" href="mailto:{{ m.buyer_email }}">Responder por correo</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty">
+  <p>Todavía no tienes mensajes de compradores.</p>
+  <a class="btn" href="/">Ver publicaciones</a>
+</div>
+{% endif %}
+{% endblock %}

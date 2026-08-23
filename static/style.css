@@ -263,3 +263,18 @@ table.mylist img { width: 64px; height: 48px; object-fit: cover; border-radius: 
 .row-actions form { display: inline; }
 
 .page-title { font-size: 22px; font-weight: 800; margin-bottom: 16px; }
+
+.msg-list { display: flex; flex-direction: column; gap: 12px; max-width: 720px; }
+.msg-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+}
+.msg-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 6px; }
+.msg-buyer { font-weight: 700; }
+.msg-date { color: var(--muted); font-size: 12px; margin-left: 8px; }
+.msg-listing { font-size: 13px; color: var(--green-dark); font-weight: 600; }
+.msg-body { margin: 0 0 10px; white-space: pre-wrap; }
+.msg-actions { display: flex; gap: 8px; flex-wrap: wrap; }
