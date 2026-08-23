@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 172" role="img" aria-label="MotorCriollo — Tu próximo carro está aquí">
+  <defs>
+    <path id="mc-star2" d="M0 -6 L1.43 -2 L5.66 -1.85 L2.33 0.85 L3.5 5 L0 2.5 L-3.5 5 L-2.33 0.85 L-5.66 -1.85 L-1.43 -2 Z"/>
+    <linearGradient id="mc-silver" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f6f8f9"/>
+      <stop offset="55%" stop-color="#c3cad0"/>
+      <stop offset="100%" stop-color="#8b959c"/>
+    </linearGradient>
+    <linearGradient id="mc-red" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff6b6b"/>
+      <stop offset="55%" stop-color="#d81b3a"/>
+      <stop offset="100%" stop-color="#8f0f1e"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="4" y="4" width="412" height="164" rx="22" fill="#111315" stroke="#f4c430" stroke-width="4"/>
+
+  <!-- car silhouette, line art -->
+  <g fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M58 64 C82 40 114 25 160 21 C210 17 250 22 285 35 C305 42 316 50 300 56"/>
+    <path d="M45 68 L100 65 L320 63 L362 68"/>
+  </g>
+
+  <!-- wordmark -->
+  <text x="210" y="114" text-anchor="middle" font-family="'Arial Black', Arial, sans-serif" font-weight="900" font-size="46" letter-spacing="-1">
+    <tspan fill="url(#mc-silver)">Motor</tspan><tspan fill="url(#mc-red)">Criollo</tspan>
+  </text>
+
+  <!-- tagline -->
+  <text x="210" y="132" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700" font-size="12" letter-spacing="2.5" fill="#cfd2d4">TU PRÓXIMO CARRO ESTÁ AQUÍ</text>
+
+  <!-- flag bar with 8 stars (Venezuela) -->
+  <rect x="30" y="140" width="360" height="7.3" fill="#fcd116"/>
+  <rect x="30" y="147.3" width="360" height="7.4" fill="#00247d"/>
+  <rect x="30" y="154.7" width="360" height="7.3" fill="#cf142b"/>
+  <g fill="#fff">
+    <use href="#mc-star2" transform="translate(50 151)"/>
+    <use href="#mc-star2" transform="translate(96 149.3)"/>
+    <use href="#mc-star2" transform="translate(142 148.2)"/>
+    <use href="#mc-star2" transform="translate(188 147.8)"/>
+    <use href="#mc-star2" transform="translate(234 148.2)"/>
+    <use href="#mc-star2" transform="translate(280 149.3)"/>
+    <use href="#mc-star2" transform="translate(326 151)"/>
+    <use href="#mc-star2" transform="translate(368 153.5)"/>
+  </g>
+</svg>

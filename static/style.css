@@ -44,25 +44,9 @@ img { max-width: 100%; display: block; }
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 20px;
-  font-weight: 800;
   text-decoration: none !important;
 }
-.brand-mark { border-radius: 8px; flex: none; }
-.brand-word { letter-spacing: -0.01em; }
-.brand-motor {
-  background: linear-gradient(180deg, #f4f6f7 0%, #b9c1c6 55%, #8b959c 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-.brand-criollo {
-  background: linear-gradient(180deg, #ff5b5b 0%, #cf142b 60%, #8f0f1e 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
+.brand-logo { height: 48px; width: auto; }
 
 .nav { display: flex; align-items: center; gap: 14px; font-size: 14px; }
 .nav a { color: #e6e8ea; }
