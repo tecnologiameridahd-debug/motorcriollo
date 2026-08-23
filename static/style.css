@@ -30,8 +30,8 @@ img { max-width: 100%; display: block; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  background: #111315;
+  border-bottom: 2px solid var(--accent);
   padding: 12px 20px;
   position: sticky;
   top: 0;
@@ -44,16 +44,30 @@ img { max-width: 100%; display: block; }
   gap: 10px;
   font-size: 20px;
   font-weight: 800;
-  color: var(--green-dark) !important;
   text-decoration: none !important;
 }
 .brand-mark { border-radius: 8px; flex: none; }
 .brand-word { letter-spacing: -0.01em; }
-.brand-motor { color: var(--green-dark); }
-.brand-criollo { color: #d99400; }
+.brand-motor {
+  background: linear-gradient(180deg, #f4f6f7 0%, #b9c1c6 55%, #8b959c 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.brand-criollo {
+  background: linear-gradient(180deg, #ff5b5b 0%, #cf142b 60%, #8f0f1e 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
 
 .nav { display: flex; align-items: center; gap: 14px; font-size: 14px; }
-.nav a { color: var(--text); }
+.nav a { color: #e6e8ea; }
+.nav a:hover { color: var(--accent); }
+.nav .btn-ghost { color: #e6e8ea !important; border-color: #3a3d40; }
+.nav .btn-ghost:hover { background: #1c1f21; }
+.nav .btn { background: var(--accent); color: #16201a !important; }
+.nav .btn:hover { background: #e0a300; }
 
 main {
   max-width: 1100px;
