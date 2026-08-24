@@ -19,7 +19,34 @@
     {% endif %}
 
     <h1 style="margin-top:20px">{{ listing.title }}</h1>
+    {% with level=listing.verify_level, size='lg' %}
+    {% include "verify_badges.html" %}
+    {% endwith %}
     <div class="desc">{{ listing.description or "Sin descripción adicional." }}</div>
+
+    {% if listing.photo_odometer or listing.photo_serial or listing.photo_title %}
+    <h2 class="docs-title">Pruebas del carro</h2>
+    <div class="docs-grid">
+      {% if listing.photo_odometer %}
+      <figure>
+        <img src="{{ listing.photo_odometer }}" alt="Tablero y odómetro" onclick="document.getElementById('mainPhoto').src=this.src" />
+        <figcaption>Tablero / odómetro</figcaption>
+      </figure>
+      {% endif %}
+      {% if listing.photo_serial %}
+      <figure>
+        <img src="{{ listing.photo_serial }}" alt="Serial de motor o chasis" onclick="document.getElementById('mainPhoto').src=this.src" />
+        <figcaption>Serial motor / chasis</figcaption>
+      </figure>
+      {% endif %}
+      {% if listing.photo_title %}
+      <figure>
+        <img src="{{ listing.photo_title }}" alt="Título o carnet" onclick="document.getElementById('mainPhoto').src=this.src" />
+        <figcaption>Título o carnet (datos sensibles tapados)</figcaption>
+      </figure>
+      {% endif %}
+    </div>
+    {% endif %}
   </div>
 
   <div class="detail-side">
@@ -39,7 +66,7 @@
     <div class="seller-box">
       <div class="seller-name">{{ seller.name if seller else "Vendedor" }}</div>
       {% if listing.seller_verified %}
-      <p class="verified-line">Vendedor verificado · {{ listing.seller_code }}</p>
+      <p class="verified-line">Nivel {{ listing.verify_level }} · {{ listing.seller_code }}</p>
       {% endif %}
       {% if listing.phone %}
       <p style="margin:6px 0"><a class="btn btn-block" href="https://wa.me/{{ listing.phone|replace(' ', '')|replace('+', '')|replace('-', '') }}" target="_blank" rel="noopener">Contactar por WhatsApp</a></p>

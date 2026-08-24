@@ -662,3 +662,59 @@ table.mylist img { width: 64px; height: 48px; object-fit: cover; border-radius: 
   .brand-logo { height: 48px; }
   .btn-search { width: 100%; min-width: 0; }
 }
+
+.vbadges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.vbadge {
+  display: flex; align-items: center; gap: 8px;
+  border: 1px solid var(--line); border-radius: 12px;
+  padding: 8px 10px; background: #f3f4f6; color: #6b7280;
+}
+.vbadge.on { background: #111; color: #fff; border-color: #111; }
+.vn {
+  width: 24px; height: 24px; border-radius: 999px; flex: none;
+  display: grid; place-items: center; font-weight: 800; font-size: 12px;
+  background: #e5e7eb; color: #111;
+}
+.vbadge.on .vn { background: var(--accent); }
+.vl { display: flex; flex-direction: column; font-size: 12px; line-height: 1.2; }
+.vl em { font-style: normal; opacity: .75; font-weight: 500; font-size: 11px; }
+.vbadges-sm .vbadge { padding: 5px 8px; }
+.vbadges-sm .vl em { display: none; }
+.vbadges-lg { margin: 14px 0 8px; }
+.vbadges-lg .vbadge { flex: 1; min-width: 160px; padding: 12px 14px; }
+
+.promises {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  margin: 36px 0 8px;
+}
+.promises blockquote {
+  margin: 0; background: #fff; border: 1px solid var(--line);
+  border-radius: 16px; padding: 16px 18px; font-weight: 700; font-size: 15px;
+}
+.who { text-align: center; color: var(--muted); font-size: 14px; margin: 8px 0 28px; }
+
+.scam {
+  background: #fff; border: 1px solid var(--line); border-radius: 20px;
+  padding: 24px 26px; margin: 28px 0 8px;
+}
+.scam h2 { margin-top: 0; }
+.scam ol { margin: 0; padding-left: 20px; }
+.scam li { margin: 8px 0; }
+
+.docs-title { font-size: 18px; margin: 24px 0 10px; }
+.docs-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.docs-grid img {
+  width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 12px;
+  cursor: pointer; border: 1px solid var(--line);
+}
+.docs-grid figcaption { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.docs-fields {
+  border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin: 8px 0;
+}
+.docs-fields legend { font-weight: 800; padding: 0 6px; }
+
+@media (max-width: 800px) {
+  .promises, .docs-grid { grid-template-columns: 1fr; }
+}

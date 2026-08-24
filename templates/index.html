@@ -8,7 +8,7 @@
   <div class="hero-shade"></div>
   <div class="wrap hero-copy">
     <h1>Encuentra tu<br>próximo <em>carro</em></h1>
-    <p class="hero-lead">Compra y vende directo, sin intermediarios.</p>
+    <p class="hero-lead">Publicamos solo carros con información verificable.</p>
     <ul class="hero-stats">
       <li>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13l2-5h14l2 5M5 13v5h2v-2h10v2h2v-5M7 16h.01M17 16h.01"/></svg>
@@ -87,8 +87,8 @@
       <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
     </span>
     <div>
-      <h3>Directo y sin intermediarios</h3>
-      <p>Trato directo entre comprador y vendedor.</p>
+      <h3>Trato directo, reglas claras</h3>
+      <p>Hablas con el vendedor, pero con sellos de verificación a la vista.</p>
     </div>
   </article>
   <article>
@@ -96,8 +96,8 @@
       <svg viewBox="0 0 24 24"><path d="M7 11V8a5 5 0 0 1 10 0v3M6 11h12v10H6z"/></svg>
     </span>
     <div>
-      <h3>Publica con confianza</h3>
-      <p>Consejos y herramientas para que compres con calma.</p>
+      <h3>Si algo se ve mal, lo eliminamos</h3>
+      <p>Revisamos denuncias y bajamos anuncios sospechosos.</p>
     </div>
   </article>
   <article>
@@ -114,8 +114,8 @@
       <svg viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>
     </span>
     <div>
-      <h3>Soporte real</h3>
-      <p>Estamos para ayudarte en todo el proceso.</p>
+      <h3>Proyecto venezolano</h3>
+      <p>Soporte real, no un marketplace anónimo.</p>
     </div>
   </article>
 </section>
@@ -133,7 +133,6 @@
       <a class="card-link" href="/listing/{{ l.id }}">
         <div class="card-photo-wrap">
           {% if l.status == 'sold' %}<span class="badge-sold">VENDIDO</span>{% endif %}
-          {% if l.seller_verified %}<span class="badge-ok">Verificado {{ l.seller_code }}</span>{% endif %}
           {% if not searching and loop.index <= 2 %}<span class="badge-feat">Publicación destacada</span>{% endif %}
           {% if l.photo %}
           <img class="card-photo" src="{{ l.photo }}" alt="{{ l.title }}" />
@@ -153,6 +152,9 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>
             {{ l.city }}{% if l.state %}, {{ l.state }}{% endif %}
           </div>
+          {% with level=l.verify_level, size='sm' %}
+          {% include "verify_badges.html" %}
+          {% endwith %}
         </div>
       </a>
     </article>
@@ -167,6 +169,13 @@
 </section>
 
 {% if not searching %}
+<section class="promises">
+  <blockquote>“Publicamos solo carros con información verificable.”</blockquote>
+  <blockquote>“Trato directo, pero con reglas claras.”</blockquote>
+  <blockquote>“Si algo se ve mal, lo eliminamos.”</blockquote>
+</section>
+<p class="who">Proyecto venezolano con soporte real · motorcriollo.store</p>
+
 <section class="sell-banner">
   <div class="sell-banner-inner">
     <div>
@@ -196,6 +205,18 @@
       <p>Sube el carro, habla por WhatsApp y cierran el trato entre ustedes. Sin comisión.</p>
     </article>
   </div>
+</section>
+
+<section class="scam" id="estafas">
+  <h2>Cómo evitar estafas</h2>
+  <ol>
+    <li><strong>Mira los sellos.</strong> Nivel 1 = cédula y WhatsApp. Nivel 2 = título, serial y odómetro. Nivel 3 = inspección.</li>
+    <li><strong>No pagues por adelantado</strong> ni por transferencia a un desconocido. Ve el carro en persona.</li>
+    <li><strong>Compara el odómetro</strong> de la foto con el del tablero real. Si no coinciden, vete.</li>
+    <li><strong>Pide ver serial de motor y chasis</strong> y el título. Los datos sensibles pueden ir tapados.</li>
+    <li><strong>WhatsApp del anuncio</strong> debe ser el mismo del vendedor verificado. Si te pasan a otro número, desconfía.</li>
+    <li><strong>Si algo se ve mal, avísanos.</strong> Lo revisamos y lo eliminamos. soporte@motorcriollo.store</li>
+  </ol>
 </section>
 {% endif %}
 {% endblock %}

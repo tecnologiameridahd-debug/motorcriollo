@@ -336,12 +336,17 @@ async def publicar_post(
     state: str = Form(""),
     phone: str = Form(""),
     photos: list[UploadFile] = File(default=[]),
+    photo_odometer: UploadFile = File(None),
+    photo_serial: UploadFile = File(None),
+    photo_title: UploadFile = File(None),
 ):
     user = me(request)
     if not user:
         return RedirectResponse("/login", status_code=302)
     if not can_publish(user):
         return RedirectResponse("/verificacion", status_code=302)
+    if not (phone or user.get("phone")):
+        return _page(request, "publicar.html", listing=None, error="Pon un WhatsApp activo")
     try:
         listing = create_listing(
             user_id=user["id"], title=title, brand=brand, model=model, year=year,
@@ -350,6 +355,15 @@ async def publicar_post(
             phone=phone or user.get("phone") or "",
         )
         await _save_listing_photos(listing["id"], photos)
+        odo = await _save_photo(listing["id"], photo_odometer)
+        ser = await _save_photo(listing["id"], photo_serial)
+        tit = await _save_photo(listing["id"], photo_title)
+        if not (odo and ser and tit):
+            return _page(
+                request, "publicar.html", listing=listing,
+                error="Sube odómetro, serial y título (puedes tapar datos sensibles).",
+            )
+        update_listing(listing["id"], photo_odometer=odo, photo_serial=ser, photo_title=tit)
     except ValueError as e:
         return _page(request, "publicar.html", listing=None, error=str(e))
     return RedirectResponse(f"/listing/{listing['id']}", status_code=303)
@@ -384,6 +398,9 @@ async def editar_post(
     state: str = Form(""),
     phone: str = Form(""),
     photos: list[UploadFile] = File(default=[]),
+    photo_odometer: UploadFile = File(None),
+    photo_serial: UploadFile = File(None),
+    photo_title: UploadFile = File(None),
 ):
     user = me(request)
     listing = get_listing(listing_id)
@@ -398,6 +415,18 @@ async def editar_post(
             condition=condition, description=description, city=city, state=state, phone=phone,
         )
         await _save_listing_photos(listing_id, photos)
+        docs = {}
+        odo = await _save_photo(listing_id, photo_odometer)
+        ser = await _save_photo(listing_id, photo_serial)
+        tit = await _save_photo(listing_id, photo_title)
+        if odo:
+            docs["photo_odometer"] = odo
+        if ser:
+            docs["photo_serial"] = ser
+        if tit:
+            docs["photo_title"] = tit
+        if docs:
+            listing = update_listing(listing_id, **docs)
     except ValueError as e:
         return _page(request, "publicar.html", listing=listing, error=str(e))
     return RedirectResponse(f"/listing/{listing_id}", status_code=303)
@@ -805,6 +834,15 @@ def admin_kyc_revoke(request: Request, user_id: int, note: str = Form("")):
         return gate
     revoke_kyc(user_id, note=note)
     return RedirectResponse("/admin?tab=users", status_code=303)
+
+
+@app.post("/admin/listing/{listing_id}/inspeccion")
+def admin_listing_inspect(request: Request, listing_id: int, inspected: int = Form(1)):
+    gate = _require_admin(request)
+    if gate:
+        return gate
+    update_listing(listing_id, inspected=1 if int(inspected or 0) else 0)
+    return RedirectResponse("/admin?tab=listings", status_code=303)
 
 
 @app.post("/admin/listing/{listing_id}/eliminar")

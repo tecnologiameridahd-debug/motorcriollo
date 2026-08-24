@@ -11,11 +11,13 @@ from storage import (
     create_listing,
     create_user,
     delete_listing,
+    delete_listing_photos,
     delete_user,
     get_user,
     get_user_by_email,
     init_db,
     list_user_listings,
+    update_listing,
 )
 
 DEMO_USERS = [
@@ -489,6 +491,81 @@ LISTINGS = [
 ]
 
 
+def _photo_kind(brand: str, model: str, fuel: str) -> str:
+    m = f"{brand} {model} {fuel}".lower()
+    if "mustang" in m:
+        return "sport-red"
+    if "wrangler" in m:
+        return "jeep-green"
+    if "model 3" in m or "eléctric" in m:
+        return "ev-white"
+    if any(x in m for x in ("hilux", "ranger", "l200", "frontier")):
+        return "pickup-white"
+    if any(x in m for x in ("silverado", "ram", "f-150", "f150")):
+        return "pickup-gray"
+    if any(x in m for x in ("tahoe", "explorer", "santa fe", "grand cherokee")):
+        return "suv-white"
+    if "sorento" in m or "journey" in m:
+        return "suv-family"
+    if any(x in m for x in ("tucson", "sportage", "cx-5", "cr-v")):
+        return "suv-blue"
+    if "duster" in m or "vitara" in m:
+        return "suv-orange"
+    if "fortuner" in m or "4runner" in m:
+        return "suv-black"
+    if any(x in m for x in ("bmw", "mercedes", "audi", "camry", "accord")):
+        return "lux-black"
+    if "picanto" in m or "spark" in m:
+        return "hatch-yellow"
+    if "aveo" in m or "logan" in m or "tiida" in m:
+        return "hatch-beige"
+    if any(x in m for x in ("fit", "swift", "fiesta", "yaris")):
+        return "hatch-red"
+    if any(x in m for x in ("jetta", "golf", "civic", "cruze")):
+        return "sedan-blue"
+    if any(x in m for x in ("elantra", "versa", "rio", "accent")):
+        return "sedan-white"
+    return "sedan-silver"
+
+
+def _real_photo(brand: str, model: str, year: int, fuel: str, color: str, label: str) -> str:
+    kind = _photo_kind(brand, model, fuel)
+    jpg = os.path.join(DEMO_DIR, f"{kind}.jpg")
+    if os.path.exists(jpg):
+        return f"/static/demo/{kind}.jpg"
+    slug = f"{brand}-{model}-{year}".lower().replace(" ", "-")
+    return _ensure_photo(slug, color, label)
+
+
+def _apply_real_photos() -> int:
+    odo = "/static/demo/doc-odometer.jpg"
+    serial = "/static/demo/doc-serial.jpg"
+    title = "/static/demo/doc-title.jpg"
+    by_title = {item["title"]: (i, item) for i, item in enumerate(LISTINGS)}
+    n = 0
+    for listing in browse_listings(limit=500):
+        pair = by_title.get(listing.get("title") or "")
+        if not pair:
+            continue
+        i, item = pair
+        photo = _real_photo(
+            item["brand"], item["model"], item["year"], item["fuel_type"],
+            item["color"], f"{item['brand']} {item['model']} {item['year']}",
+        )
+        if photo.endswith(".jpg") and listing.get("photo") != photo:
+            delete_listing_photos(listing["id"])
+            add_listing_photo(listing["id"], photo, 0)
+        update_listing(
+            listing["id"],
+            photo_odometer=odo,
+            photo_serial=serial,
+            photo_title=title,
+            inspected=1 if i % 3 == 0 else 0,
+        )
+        n += 1
+    return n
+
+
 def _ensure_photo(slug: str, color: str, label: str) -> str:
     fname = f"{slug}.svg"
     path = os.path.join(DEMO_DIR, fname)
@@ -571,13 +648,16 @@ def seed() -> int:
             phone=phones[item["owner"]],
             is_demo=True,
         )
-        slug = f"{item['brand']}-{item['model']}-{item['year']}".lower().replace(" ", "-")
         label = f"{item['brand']} {item['model']} {item['year']}"
-        photo = _ensure_photo(slug, item["color"], label)
+        photo = _real_photo(
+            item["brand"], item["model"], item["year"], item["fuel_type"],
+            item["color"], label,
+        )
         add_listing_photo(listing["id"], photo, 0)
         created += 1
         have.add(item["title"])
 
+    _apply_real_photos()
     return created
 
 

@@ -81,8 +81,8 @@
       <input type="text" name="state" maxlength="60" value="{{ listing.state if listing else '' }}" />
     </div>
     <div class="field">
-      <label>Teléfono / WhatsApp</label>
-      <input type="text" name="phone" maxlength="30" value="{{ listing.phone if listing else (me.phone if me else '') }}" placeholder="+1 305 555 0100" />
+      <label>WhatsApp activo (obligatorio)</label>
+      <input type="text" name="phone" required maxlength="30" value="{{ listing.phone if listing else (me.phone if me else '') }}" placeholder="+58 412 555 0101" />
     </div>
   </div>
 
@@ -92,9 +92,26 @@
   </div>
 
   <div class="field">
-    <label>Fotos {% if listing and listing.photos %}(se agregarán a las existentes){% endif %}</label>
-    <input type="file" name="photos" accept="image/*" multiple />
+    <label>Fotos del carro {% if listing and listing.photos %}(se agregarán a las existentes){% endif %}</label>
+    <input type="file" name="photos" accept="image/*" multiple {% if not listing %}required{% endif %} />
   </div>
+
+  <fieldset class="docs-fields">
+    <legend>Nivel 2 — papeles del carro (obligatorio para publicar)</legend>
+    <p class="muted">Puedes tapar nombre, cédula y placas. Se ve el odómetro, el serial y que el título existe.</p>
+    <div class="field">
+      <label>Tablero con odómetro</label>
+      <input type="file" name="photo_odometer" accept="image/*" {% if not listing or not listing.photo_odometer %}required{% endif %} />
+    </div>
+    <div class="field">
+      <label>Serial del motor o chasis</label>
+      <input type="file" name="photo_serial" accept="image/*" {% if not listing or not listing.photo_serial %}required{% endif %} />
+    </div>
+    <div class="field">
+      <label>Título o carnet de circulación</label>
+      <input type="file" name="photo_title" accept="image/*" {% if not listing or not listing.photo_title %}required{% endif %} />
+    </div>
+  </fieldset>
 
   <button class="btn" type="submit">{% if listing %}Guardar cambios{% else %}Publicar anuncio{% endif %}</button>
 </form>

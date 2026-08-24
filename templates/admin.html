@@ -113,7 +113,18 @@
           <td><a href="/listing/{{ l.id }}">{{ l.title }}</a><br><span class="muted">{{ l.seller_code or "" }}</span></td>
           <td>${{ "{:,}".format(l.price).replace(",", ".") }}</td>
           <td>{{ l.city }}</td>
-          <td>
+          <td class="row-actions">
+            {% if l.inspected %}
+            <form method="post" action="/admin/listing/{{ l.id }}/inspeccion">
+              <input type="hidden" name="inspected" value="0" />
+              <button class="btn btn-ghost btn-sm" type="submit">Quitar N3</button>
+            </form>
+            {% else %}
+            <form method="post" action="/admin/listing/{{ l.id }}/inspeccion">
+              <input type="hidden" name="inspected" value="1" />
+              <button class="btn btn-sm" type="submit">Marcar N3 inspección</button>
+            </form>
+            {% endif %}
             <form method="post" action="/admin/listing/{{ l.id }}/eliminar" onsubmit="return confirm('¿Eliminar esta publicación?')">
               <button class="btn btn-danger btn-sm" type="submit">Eliminar</button>
             </form>

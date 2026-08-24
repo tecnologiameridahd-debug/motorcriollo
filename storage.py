@@ -107,6 +107,16 @@ def init_db() -> None:
             con.execute(f"ALTER TABLE users ADD COLUMN {col} {decl}")
         except Exception:
             pass
+    for col, decl in (
+        ("photo_odometer", "TEXT DEFAULT ''"),
+        ("photo_serial", "TEXT DEFAULT ''"),
+        ("photo_title", "TEXT DEFAULT ''"),
+        ("inspected", "INTEGER DEFAULT 0"),
+    ):
+        try:
+            con.execute(f"ALTER TABLE listings ADD COLUMN {col} {decl}")
+        except Exception:
+            pass
     if not USE_PG:
         con.execute(
             "CREATE INDEX IF NOT EXISTS idx_listings_status ON listings(status, created_at)"
@@ -437,6 +447,23 @@ def _listing_row(r: Any) -> dict[str, Any] | None:
     seller = get_user(d.get("user_id") or 0)
     d["seller_verified"] = bool(seller and seller.get("kyc_status") == "approved")
     d["seller_code"] = (seller or {}).get("seller_code") or ""
+    has_wa = bool((d.get("phone") or "").strip())
+    has_docs = bool(
+        (d.get("photo_odometer") or "").strip()
+        and (d.get("photo_serial") or "").strip()
+        and (d.get("photo_title") or "").strip()
+    )
+    inspected = bool(int(d.get("inspected") or 0))
+    level = 0
+    if d["seller_verified"] and has_wa:
+        level = 1
+        if has_docs:
+            level = 2
+            if inspected:
+                level = 3
+    d["verify_level"] = level
+    d["has_whatsapp"] = has_wa
+    d["has_docs"] = has_docs
     return d
 
 
@@ -498,6 +525,7 @@ def update_listing(listing_id: int, **fields) -> dict[str, Any] | None:
     allowed = {
         "title", "brand", "model", "year", "price", "mileage", "transmission",
         "fuel_type", "condition", "description", "city", "state", "phone", "status",
+        "photo_odometer", "photo_serial", "photo_title", "inspected",
     }
     sets, vals = [], []
     for k, v in fields.items():
@@ -519,8 +547,10 @@ def update_listing(listing_id: int, **fields) -> dict[str, Any] | None:
             v = (v or "")[:60]
         if k == "phone":
             v = (v or "")[:30]
-        if k in ("year", "price", "mileage"):
+        if k in ("year", "price", "mileage", "inspected"):
             v = int(v or 0)
+        if k in ("photo_odometer", "photo_serial", "photo_title"):
+            v = (v or "")[:220]
         if k == "status" and v not in STATUSES:
             continue
         sets.append(f"{k}=?")
