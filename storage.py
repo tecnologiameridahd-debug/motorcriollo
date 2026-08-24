@@ -84,8 +84,29 @@ def init_db() -> None:
             buyer_phone TEXT DEFAULT '',
             message TEXT NOT NULL,
             created_at TEXT NOT NULL)""",
+        """CREATE TABLE IF NOT EXISTS admin_sessions (
+            token TEXT PRIMARY KEY,
+            expires_at INTEGER NOT NULL)""",
     ):
         con.execute(stmt)
+    for col, decl in (
+        ("kyc_status", "TEXT DEFAULT 'none'"),
+        ("kyc_full_name", "TEXT DEFAULT ''"),
+        ("kyc_id_number", "TEXT DEFAULT ''"),
+        ("kyc_address", "TEXT DEFAULT ''"),
+        ("kyc_city", "TEXT DEFAULT ''"),
+        ("kyc_state", "TEXT DEFAULT ''"),
+        ("kyc_id_photo", "TEXT DEFAULT ''"),
+        ("kyc_address_photo", "TEXT DEFAULT ''"),
+        ("kyc_submitted_at", "TEXT DEFAULT ''"),
+        ("kyc_reviewed_at", "TEXT DEFAULT ''"),
+        ("kyc_review_note", "TEXT DEFAULT ''"),
+        ("seller_code", "TEXT DEFAULT ''"),
+    ):
+        try:
+            con.execute(f"ALTER TABLE users ADD COLUMN {col} {decl}")
+        except Exception:
+            pass
     if not USE_PG:
         con.execute(
             "CREATE INDEX IF NOT EXISTS idx_listings_status ON listings(status, created_at)"
@@ -413,6 +434,9 @@ def _listing_row(r: Any) -> dict[str, Any] | None:
     photos = list_listing_photos(d["id"])
     d["photos"] = photos
     d["photo"] = photos[0] if photos else ""
+    seller = get_user(d.get("user_id") or 0)
+    d["seller_verified"] = bool(seller and seller.get("kyc_status") == "approved")
+    d["seller_code"] = (seller or {}).get("seller_code") or ""
     return d
 
 
@@ -682,3 +706,216 @@ def count_users() -> int:
     r = execute(con, "SELECT COUNT(*) AS n FROM users").fetchone()
     con.close()
     return int(getv(r, "n") or 0)
+
+
+def can_publish(user: dict[str, Any] | None) -> bool:
+    if not user:
+        return False
+    if user.get("is_demo"):
+        return True
+    return (user.get("kyc_status") or "none") == "approved"
+
+
+def submit_kyc(
+    user_id: int,
+    *,
+    full_name: str,
+    id_number: str,
+    address: str,
+    city: str,
+    state: str,
+    id_photo: str,
+    address_photo: str,
+) -> dict[str, Any] | None:
+    full_name = (full_name or "").strip()[:80]
+    id_number = (id_number or "").strip()[:30]
+    address = (address or "").strip()[:200]
+    city = (city or "").strip()[:60]
+    state = (state or "").strip()[:60]
+    if not full_name or not id_number or not address:
+        raise ValueError("Nombre, cédula y dirección son obligatorios")
+    if not id_photo or not address_photo:
+        raise ValueError("Sube la foto de la cédula y el comprobante de dirección")
+    con = connect()
+    execute(
+        con,
+        """
+        UPDATE users SET
+          kyc_status='pending',
+          kyc_full_name=?, kyc_id_number=?, kyc_address=?,
+          kyc_city=?, kyc_state=?,
+          kyc_id_photo=?, kyc_address_photo=?,
+          kyc_submitted_at=?, kyc_review_note=''
+        WHERE id=?
+        """,
+        (full_name, id_number, address, city, state, id_photo, address_photo, _now(), user_id),
+    )
+    con.commit()
+    con.close()
+    return get_user(user_id)
+
+
+def next_seller_code() -> str:
+    con = connect()
+    r = execute(con, "SELECT seller_code FROM users WHERE seller_code != ''").fetchall()
+    con.close()
+    n = 1000
+    for row in r or []:
+        raw = str(getv(row, "seller_code") or "")
+        if raw.upper().startswith("MC-") and raw[3:].isdigit():
+            n = max(n, int(raw[3:]))
+    return f"MC-{n + 1}"
+
+
+def approve_kyc(user_id: int, note: str = "") -> dict[str, Any] | None:
+    user = get_user(user_id)
+    if not user:
+        return None
+    code = (user.get("seller_code") or "").strip() or next_seller_code()
+    con = connect()
+    execute(
+        con,
+        """
+        UPDATE users SET kyc_status='approved', seller_code=?,
+          kyc_reviewed_at=?, kyc_review_note=?
+        WHERE id=?
+        """,
+        (code, _now(), (note or "").strip()[:300], user_id),
+    )
+    con.commit()
+    con.close()
+    return get_user(user_id)
+
+
+def reject_kyc(user_id: int, note: str = "") -> dict[str, Any] | None:
+    con = connect()
+    execute(
+        con,
+        """
+        UPDATE users SET kyc_status='rejected',
+          kyc_reviewed_at=?, kyc_review_note=?
+        WHERE id=?
+        """,
+        (_now(), (note or "Documentos no válidos").strip()[:300], user_id),
+    )
+    con.commit()
+    con.close()
+    return get_user(user_id)
+
+
+def revoke_kyc(user_id: int, note: str = "") -> dict[str, Any] | None:
+    con = connect()
+    execute(
+        con,
+        """
+        UPDATE users SET kyc_status='none', seller_code='',
+          kyc_reviewed_at=?, kyc_review_note=?
+        WHERE id=?
+        """,
+        (_now(), (note or "Verificación retirada").strip()[:300], user_id),
+    )
+    con.commit()
+    con.close()
+    return get_user(user_id)
+
+
+def list_kyc(status: str = "pending", limit: int = 80) -> list[dict[str, Any]]:
+    con = connect()
+    if status == "all":
+        rows = execute(
+            con,
+            """
+            SELECT id, email, name, phone, city, state, kyc_status, kyc_full_name,
+                   kyc_id_number, kyc_address, kyc_city, kyc_state, kyc_id_photo,
+                   kyc_address_photo, kyc_submitted_at, kyc_reviewed_at,
+                   kyc_review_note, seller_code, is_demo, created_at
+            FROM users WHERE kyc_status IN ('pending','approved','rejected')
+            ORDER BY kyc_submitted_at DESC LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    else:
+        rows = execute(
+            con,
+            """
+            SELECT id, email, name, phone, city, state, kyc_status, kyc_full_name,
+                   kyc_id_number, kyc_address, kyc_city, kyc_state, kyc_id_photo,
+                   kyc_address_photo, kyc_submitted_at, kyc_reviewed_at,
+                   kyc_review_note, seller_code, is_demo, created_at
+            FROM users WHERE kyc_status=?
+            ORDER BY kyc_submitted_at DESC LIMIT ?
+            """,
+            (status, limit),
+        ).fetchall()
+    con.close()
+    return [dict(r) for r in rows]
+
+
+def count_kyc_pending() -> int:
+    con = connect()
+    r = execute(
+        con, "SELECT COUNT(*) AS n FROM users WHERE kyc_status='pending'"
+    ).fetchone()
+    con.close()
+    return int(getv(r, "n") or 0)
+
+
+def list_users_admin(limit: int = 200) -> list[dict[str, Any]]:
+    con = connect()
+    rows = execute(
+        con,
+        """
+        SELECT id, email, name, phone, city, state, kyc_status, seller_code,
+               is_demo, created_at, last_seen
+        FROM users ORDER BY created_at DESC LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
+    con.close()
+    return [dict(r) for r in rows]
+
+
+def list_all_listings(limit: int = 200) -> list[dict[str, Any]]:
+    con = connect()
+    rows = execute(
+        con,
+        "SELECT * FROM listings ORDER BY created_at DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    con.close()
+    return [_listing_row(r) for r in rows]
+
+
+def create_admin_session(days: int = 7) -> str:
+    token = secrets.token_urlsafe(32)
+    con = connect()
+    execute(
+        con,
+        "INSERT INTO admin_sessions(token, expires_at) VALUES(?,?)",
+        (token, int(time.time()) + days * 86400),
+    )
+    con.commit()
+    con.close()
+    return token
+
+
+def admin_from_token(token: str | None) -> bool:
+    if not token:
+        return False
+    con = connect()
+    r = execute(
+        con,
+        "SELECT token FROM admin_sessions WHERE token=? AND expires_at>?",
+        (token, int(time.time())),
+    ).fetchone()
+    con.close()
+    return bool(r)
+
+
+def delete_admin_session(token: str | None) -> None:
+    if not token:
+        return
+    con = connect()
+    execute(con, "DELETE FROM admin_sessions WHERE token=?", (token,))
+    con.commit()
+    con.close()

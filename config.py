@@ -10,9 +10,11 @@ UPLOAD_DIR = (
     else os.path.join(BASE_DIR, "static", "uploads")
 )
 DEMO_DIR = os.path.join(BASE_DIR, "static", "demo")
+KYC_DIR = os.path.join(DATA_DIR, "kyc")
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(DEMO_DIR, exist_ok=True)
+os.makedirs(KYC_DIR, exist_ok=True)
 
 DB_PATH = os.path.join(DATA_DIR, "motorcriollo.db")
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
@@ -84,6 +86,14 @@ try:
             APPLE_PRIVATE_KEY = f.read()
 except ImportError:
     pass
+
+
+def admin_password() -> str:
+    if ADMIN_PASSWORD:
+        return ADMIN_PASSWORD
+    if os.environ.get("RENDER"):
+        return ""
+    return "criolloadmin"
 
 
 def google_enabled() -> bool:

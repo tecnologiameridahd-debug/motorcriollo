@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Verificación de vendedor — MotorCriollo{% endblock %}
+{% block content %}
+<div class="kyc-wrap">
+  <h1 class="page-title">Verificación para publicar</h1>
+  <p class="kyc-lead">Para subir un carro, MotorCriollo debe confirmar tu cédula y tu dirección. Cuando Alberto apruebe, te damos un <strong>ID de vendedor</strong> (ej. MC-1001) y ya puedes publicar.</p>
+
+  {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+  {% if sent %}<div class="alert alert-ok">Solicitud enviada. Te avisamos cuando esté revisada. Revisa esta página o tu correo.</div>{% endif %}
+
+  {% if me.kyc_status == 'approved' %}
+    <div class="alert alert-ok">
+      Ya estás verificado. Tu ID de vendedor: <strong>{{ me.seller_code }}</strong>
+    </div>
+    <p><a class="btn" href="/publicar">Publicar un carro</a></p>
+  {% elif me.kyc_status == 'pending' %}
+    <div class="kyc-status">
+      <h2>En revisión</h2>
+      <p>Recibimos tu cédula y comprobante. No puedes publicar hasta que se apruebe.</p>
+      {% if me.kyc_id_number %}<p>Cédula enviada: <strong>{{ me.kyc_id_number }}</strong></p>{% endif %}
+    </div>
+  {% else %}
+    {% if me.kyc_status == 'rejected' %}
+      <div class="alert alert-error">
+        No se aprobó. {% if me.kyc_review_note %}Motivo: {{ me.kyc_review_note }}{% endif %}
+        Vuelve a enviar documentos claros.
+      </div>
+    {% endif %}
+
+    <form class="stack wide kyc-form" method="post" action="/verificacion" enctype="multipart/form-data">
+      <div class="field">
+        <label>Nombre completo (como en la cédula)</label>
+        <input type="text" name="full_name" required maxlength="80" value="{{ me.kyc_full_name or me.name }}" />
+      </div>
+      <div class="field">
+        <label>Cédula / ID</label>
+        <input type="text" name="id_number" required maxlength="30" placeholder="V-12.345.678" value="{{ me.kyc_id_number or '' }}" />
+      </div>
+      <div class="field">
+        <label>Dirección</label>
+        <input type="text" name="address" required maxlength="200" placeholder="Calle, edificio, apto." value="{{ me.kyc_address or '' }}" />
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Ciudad</label>
+          <input type="text" name="city" maxlength="60" value="{{ me.kyc_city or me.city or '' }}" />
+        </div>
+        <div class="field">
+          <label>Estado</label>
+          <input type="text" name="state" maxlength="60" value="{{ me.kyc_state or me.state or '' }}" />
+        </div>
+      </div>
+      <div class="field">
+        <label>Foto de la cédula (frente)</label>
+        <input type="file" name="id_photo" accept="image/*" required />
+      </div>
+      <div class="field">
+        <label>Comprobante de dirección (recibo, contrato o similar)</label>
+        <input type="file" name="address_photo" accept="image/*" required />
+      </div>
+      <button class="btn" type="submit">Enviar para revisión</button>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

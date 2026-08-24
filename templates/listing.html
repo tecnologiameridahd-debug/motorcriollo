@@ -38,6 +38,9 @@
 
     <div class="seller-box">
       <div class="seller-name">{{ seller.name if seller else "Vendedor" }}</div>
+      {% if listing.seller_verified %}
+      <p class="verified-line">Vendedor verificado · {{ listing.seller_code }}</p>
+      {% endif %}
       {% if listing.phone %}
       <p style="margin:6px 0"><a class="btn btn-block" href="https://wa.me/{{ listing.phone|replace(' ', '')|replace('+', '')|replace('-', '') }}" target="_blank" rel="noopener">Contactar por WhatsApp</a></p>
       <p style="margin:6px 0;color:var(--muted);font-size:13px">Tel: {{ listing.phone }}</p>

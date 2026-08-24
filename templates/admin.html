@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — MotorCriollo{% endblock %}
+{% block content %}
+<div class="admin">
+  <div class="admin-top">
+    <h1 class="page-title">Dashboard</h1>
+    <a class="btn btn-ghost btn-sm" href="/admin/salir">Salir del panel</a>
+  </div>
+
+  <div class="admin-stats">
+    <div><strong>{{ stats.kyc_pending }}</strong><span>por verificar</span></div>
+    <div><strong>{{ stats.users }}</strong><span>usuarios</span></div>
+    <div><strong>{{ stats.listings }}</strong><span>carros activos</span></div>
+  </div>
+
+  <nav class="admin-tabs">
+    <a class="{% if tab == 'kyc' %}is-on{% endif %}" href="/admin?tab=kyc">Verificaciones</a>
+    <a class="{% if tab == 'users' %}is-on{% endif %}" href="/admin?tab=users">Usuarios</a>
+    <a class="{% if tab == 'listings' %}is-on{% endif %}" href="/admin?tab=listings">Publicaciones</a>
+  </nav>
+
+  {% if tab == 'kyc' %}
+    <h2>Pendientes</h2>
+    {% if pending %}
+      {% for u in pending %}
+      <article class="kyc-card">
+        <header>
+          <div>
+            <strong>{{ u.kyc_full_name or u.name }}</strong>
+            <div class="muted">{{ u.email }} · {{ u.phone }}</div>
+          </div>
+          <span class="status-pill status-inactive">Pendiente</span>
+        </header>
+        <p>Cédula: <strong>{{ u.kyc_id_number }}</strong><br>
+           Dirección: {{ u.kyc_address }}, {{ u.kyc_city }} {{ u.kyc_state }}</p>
+        <div class="kyc-photos">
+          {% if u.kyc_id_photo %}
+          <a href="/admin/kyc/{{ u.id }}/id" target="_blank" rel="noopener"><img src="/admin/kyc/{{ u.id }}/id" alt="Cédula" /></a>
+          {% endif %}
+          {% if u.kyc_address_photo %}
+          <a href="/admin/kyc/{{ u.id }}/addr" target="_blank" rel="noopener"><img src="/admin/kyc/{{ u.id }}/addr" alt="Dirección" /></a>
+          {% endif %}
+        </div>
+        <div class="kyc-actions">
+          <form method="post" action="/admin/kyc/{{ u.id }}/aprobar">
+            <input type="text" name="note" placeholder="Nota (opcional)" />
+            <button class="btn btn-sm" type="submit">Aprobar y dar ID</button>
+          </form>
+          <form method="post" action="/admin/kyc/{{ u.id }}/rechazar">
+            <input type="text" name="note" placeholder="Motivo del rechazo" required />
+            <button class="btn btn-danger btn-sm" type="submit">Rechazar</button>
+          </form>
+        </div>
+      </article>
+      {% endfor %}
+    {% else %}
+      <p class="muted">No hay solicitudes pendientes.</p>
+    {% endif %}
+
+    {% if reviewed %}
+      <h2>Ya revisadas</h2>
+      <table class="mylist">
+        <thead><tr><th>Nombre</th><th>Cédula</th><th>ID vendedor</th><th>Estado</th></tr></thead>
+        <tbody>
+          {% for u in reviewed %}
+          <tr>
+            <td>{{ u.kyc_full_name or u.name }}<br><span class="muted">{{ u.email }}</span></td>
+            <td>{{ u.kyc_id_number }}</td>
+            <td>{{ u.seller_code or "—" }}</td>
+            <td>
+              {% if u.kyc_status == 'approved' %}<span class="status-pill status-active">Aprobado</span>
+              {% else %}<span class="status-pill status-sold">Rechazado</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  {% endif %}
+
+  {% if tab == 'users' %}
+    <h2>Usuarios</h2>
+    <table class="mylist">
+      <thead><tr><th>Nombre</th><th>Correo</th><th>ID</th><th>KYC</th><th></th></tr></thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td>{{ u.name }}{% if u.is_demo %} <span class="muted">demo</span>{% endif %}</td>
+          <td>{{ u.email }}</td>
+          <td>{{ u.seller_code or "—" }}</td>
+          <td>{{ u.kyc_status or "none" }}</td>
+          <td>
+            {% if u.kyc_status == 'approved' %}
+            <form method="post" action="/admin/kyc/{{ u.id }}/quitar" onsubmit="return confirm('¿Quitar verificación? Ya no podrá publicar.')">
+              <button class="btn btn-ghost btn-sm" type="submit">Quitar ID</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+
+  {% if tab == 'listings' %}
+    <h2>Publicaciones</h2>
+    <table class="mylist">
+      <thead><tr><th></th><th>Título</th><th>Precio</th><th>Ciudad</th><th></th></tr></thead>
+      <tbody>
+        {% for l in listings %}
+        <tr>
+          <td>{% if l.photo %}<img src="{{ l.photo }}" alt="" />{% endif %}</td>
+          <td><a href="/listing/{{ l.id }}">{{ l.title }}</a><br><span class="muted">{{ l.seller_code or "" }}</span></td>
+          <td>${{ "{:,}".format(l.price).replace(",", ".") }}</td>
+          <td>{{ l.city }}</td>
+          <td>
+            <form method="post" action="/admin/listing/{{ l.id }}/eliminar" onsubmit="return confirm('¿Eliminar esta publicación?')">
+              <button class="btn btn-danger btn-sm" type="submit">Eliminar</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+</div>
+{% endblock %}

@@ -2,7 +2,11 @@
 {% block title %}Mis publicaciones — MotorCriollo{% endblock %}
 {% block content %}
 <h1 class="page-title">Mis publicaciones</h1>
+{% if not can_publish %}
+<div class="alert alert-error">Para publicar un carro debes verificar cédula y dirección. <a href="/verificacion">Verificarme</a></div>
+{% else %}
 <p><a class="btn" href="/publicar">+ Publicar otro carro</a></p>
+{% endif %}
 
 {% if listings %}
 <table class="mylist">

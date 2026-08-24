@@ -133,6 +133,7 @@
       <a class="card-link" href="/listing/{{ l.id }}">
         <div class="card-photo-wrap">
           {% if l.status == 'sold' %}<span class="badge-sold">VENDIDO</span>{% endif %}
+          {% if l.seller_verified %}<span class="badge-ok">Verificado {{ l.seller_code }}</span>{% endif %}
           {% if not searching and loop.index <= 2 %}<span class="badge-feat">Publicación destacada</span>{% endif %}
           {% if l.photo %}
           <img class="card-photo" src="{{ l.photo }}" alt="{{ l.title }}" />
@@ -181,18 +182,18 @@
   <div class="how-grid">
     <article>
       <span class="how-n">1</span>
-      <h3>Publica o busca</h3>
-      <p>Sube fotos de tu carro o filtra por marca, precio, año y ciudad.</p>
+      <h3>Crea tu cuenta</h3>
+      <p>Regístrate y busca carros por marca, precio, año y ciudad.</p>
     </article>
     <article>
       <span class="how-n">2</span>
-      <h3>Habla directo</h3>
-      <p>Contacta al vendedor por WhatsApp o mensaje. Sin comisiones de por medio.</p>
+      <h3>Verifica tu ID</h3>
+      <p>Envía cédula y comprobante de dirección. MotorCriollo te da un ID de vendedor para poder publicar.</p>
     </article>
     <article>
       <span class="how-n">3</span>
-      <h3>Cierra el trato</h3>
-      <p>Se ven, revisan el carro y cierran entre ustedes. MotorCriollo no cobra la venta.</p>
+      <h3>Publica y cierra</h3>
+      <p>Sube el carro, habla por WhatsApp y cierran el trato entre ustedes. Sin comisión.</p>
     </article>
   </div>
 </section>

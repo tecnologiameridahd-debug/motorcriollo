@@ -7,13 +7,13 @@ import threading
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from config import (
-    ADMIN_PASSWORD,
     BASE_DIR,
+    KYC_DIR,
     MAX_PHOTOS,
     OAUTH_STATE_COOKIE,
     PERSISTENT,
@@ -22,6 +22,7 @@ from config import (
     SESSION_COOKIE,
     SESSION_DAYS,
     UPLOAD_DIR,
+    admin_password,
     apple_enabled,
     google_enabled,
 )
@@ -42,11 +43,18 @@ from storage import (
     TRANSMISSIONS,
     add_buyer_message,
     add_listing_photo,
+    admin_from_token,
+    approve_kyc,
     browse_listings,
+    can_publish,
     count_active_listings,
+    count_kyc_pending,
+    count_users,
+    create_admin_session,
     create_listing,
     create_session,
     create_user,
+    delete_admin_session,
     delete_listing,
     delete_session,
     delete_user,
@@ -54,17 +62,25 @@ from storage import (
     get_user,
     get_user_by_email,
     init_db,
+    list_all_listings,
+    list_kyc,
     list_seller_messages,
     list_user_listings,
+    list_users_admin,
     login,
     make_email_token,
+    reject_kyc,
+    revoke_kyc,
     set_password,
+    submit_kyc,
     take_email_token,
     update_listing,
     update_profile,
     upsert_oauth_user,
     user_from_session,
 )
+
+ADMIN_COOKIE = "mc_admin"
 
 app = FastAPI(title="MotorCriollo")
 app.mount("/static/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
@@ -82,8 +98,15 @@ def me(request: Request):
     return user_from_session(request.cookies.get(SESSION_COOKIE))
 
 
+def _admin(request: Request) -> bool:
+    return admin_from_token(request.cookies.get(ADMIN_COOKIE))
+
+
 def _page(request: Request, name: str, **ctx):
-    ctx.setdefault("me", me(request))
+    user = me(request)
+    ctx.setdefault("me", user)
+    ctx.setdefault("is_admin", _admin(request))
+    ctx.setdefault("can_publish", can_publish(user))
     ctx.setdefault("_base", _base(request))
     ctx.setdefault("google_ok", google_enabled())
     ctx.setdefault("apple_ok", apple_enabled())
@@ -138,6 +161,27 @@ async def _save_photo(listing_id: int, photo: UploadFile | None) -> str:
     with open(dest, "wb") as f:
         f.write(data)
     return f"/static/uploads/{fname}"
+
+
+async def _save_kyc_photo(user_id: int, kind: str, photo: UploadFile | None) -> str:
+    if not photo or not photo.filename:
+        return ""
+    ext = Path(photo.filename).suffix.lower()
+    check = _PHOTO_MAGIC.get(ext)
+    if not check:
+        raise ValueError("Foto: usa jpg, png, gif o webp")
+    data = await photo.read()
+    if len(data) < 80:
+        raise ValueError("La foto está vacía o dañada")
+    if len(data) > 8 * 1024 * 1024:
+        raise ValueError("La foto pesa más de 8 MB")
+    if not check(data):
+        raise ValueError("El archivo no es una imagen válida")
+    fname = f"{int(user_id)}_{kind}{ext}"
+    dest = os.path.join(KYC_DIR, fname)
+    with open(dest, "wb") as f:
+        f.write(data)
+    return fname
 
 
 async def _save_listing_photos(listing_id: int, files: list[UploadFile | None]) -> int:
@@ -270,6 +314,8 @@ def publicar_get(request: Request):
     user = me(request)
     if not user:
         return RedirectResponse("/login?next=/publicar", status_code=302)
+    if not can_publish(user):
+        return RedirectResponse("/verificacion", status_code=302)
     return _page(request, "publicar.html", listing=None)
 
 
@@ -294,6 +340,8 @@ async def publicar_post(
     user = me(request)
     if not user:
         return RedirectResponse("/login", status_code=302)
+    if not can_publish(user):
+        return RedirectResponse("/verificacion", status_code=302)
     try:
         listing = create_listing(
             user_id=user["id"], title=title, brand=brand, model=model, year=year,
@@ -383,6 +431,48 @@ def mis_publicaciones(request: Request):
         return RedirectResponse("/login?next=/mis-publicaciones", status_code=302)
     listings = list_user_listings(user["id"])
     return _page(request, "mis_publicaciones.html", listings=listings)
+
+
+@app.get("/verificacion", response_class=HTMLResponse)
+def verificacion_get(request: Request, ok: int = 0):
+    user = me(request)
+    if not user:
+        return RedirectResponse("/login?next=/verificacion", status_code=302)
+    return _page(request, "verificacion.html", sent=bool(ok))
+
+
+@app.post("/verificacion")
+async def verificacion_post(
+    request: Request,
+    full_name: str = Form(...),
+    id_number: str = Form(...),
+    address: str = Form(...),
+    city: str = Form(""),
+    state: str = Form(""),
+    id_photo: UploadFile = File(None),
+    address_photo: UploadFile = File(None),
+):
+    user = me(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    if user.get("kyc_status") == "approved":
+        return RedirectResponse("/publicar", status_code=302)
+    try:
+        id_path = await _save_kyc_photo(user["id"], "id", id_photo)
+        addr_path = await _save_kyc_photo(user["id"], "addr", address_photo)
+        submit_kyc(
+            user["id"],
+            full_name=full_name,
+            id_number=id_number,
+            address=address,
+            city=city or user.get("city") or "",
+            state=state or user.get("state") or "",
+            id_photo=id_path,
+            address_photo=addr_path,
+        )
+    except ValueError as e:
+        return _page(request, "verificacion.html", error=str(e))
+    return RedirectResponse("/verificacion?ok=1", status_code=303)
 
 
 @app.get("/mensajes", response_class=HTMLResponse)
@@ -609,6 +699,123 @@ def eliminar_cuenta(request: Request):
     return resp
 
 
+def _require_admin(request: Request):
+    if _admin(request):
+        return None
+    return RedirectResponse("/admin/entrar", status_code=302)
+
+
+@app.get("/admin/entrar", response_class=HTMLResponse)
+def admin_login_get(request: Request):
+    if _admin(request):
+        return RedirectResponse("/admin", status_code=302)
+    return _page(request, "admin_login.html")
+
+
+@app.post("/admin/entrar")
+def admin_login_post(request: Request, password: str = Form(...)):
+    want = admin_password()
+    if not want or password != want:
+        return _page(request, "admin_login.html", error="Clave incorrecta")
+    token = create_admin_session(7)
+    resp = RedirectResponse("/admin", status_code=303)
+    resp.set_cookie(
+        ADMIN_COOKIE,
+        token,
+        max_age=7 * 86400,
+        httponly=True,
+        samesite="lax",
+        secure=bool(os.environ.get("RENDER") or PUBLIC_BASE_URL.startswith("https")),
+    )
+    return resp
+
+
+@app.get("/admin/salir")
+def admin_logout(request: Request):
+    delete_admin_session(request.cookies.get(ADMIN_COOKIE))
+    resp = RedirectResponse("/admin/entrar", status_code=302)
+    resp.delete_cookie(ADMIN_COOKIE)
+    return resp
+
+
+@app.get("/admin", response_class=HTMLResponse)
+def admin_home(request: Request, tab: str = "kyc"):
+    gate = _require_admin(request)
+    if gate:
+        return gate
+    pending = list_kyc("pending")
+    reviewed = list_kyc("all")
+    return _page(
+        request,
+        "admin.html",
+        tab=tab or "kyc",
+        stats={
+            "listings": count_active_listings(),
+            "users": count_users(),
+            "kyc_pending": count_kyc_pending(),
+        },
+        pending=pending,
+        reviewed=[u for u in reviewed if u.get("kyc_status") != "pending"],
+        users=list_users_admin(),
+        listings=list_all_listings(),
+    )
+
+
+@app.get("/admin/kyc/{user_id}/{kind}")
+def admin_kyc_photo(request: Request, user_id: int, kind: str):
+    gate = _require_admin(request)
+    if gate:
+        return gate
+    if kind not in ("id", "addr"):
+        return RedirectResponse("/admin", status_code=302)
+    user = get_user(user_id)
+    if not user:
+        return RedirectResponse("/admin", status_code=302)
+    fname = user.get("kyc_id_photo") if kind == "id" else user.get("kyc_address_photo")
+    if not fname:
+        return RedirectResponse("/admin", status_code=302)
+    path = os.path.join(KYC_DIR, os.path.basename(fname))
+    if not os.path.isfile(path):
+        return RedirectResponse("/admin", status_code=302)
+    return FileResponse(path)
+
+
+@app.post("/admin/kyc/{user_id}/aprobar")
+def admin_kyc_approve(request: Request, user_id: int, note: str = Form("")):
+    gate = _require_admin(request)
+    if gate:
+        return gate
+    approve_kyc(user_id, note=note)
+    return RedirectResponse("/admin?tab=kyc", status_code=303)
+
+
+@app.post("/admin/kyc/{user_id}/rechazar")
+def admin_kyc_reject(request: Request, user_id: int, note: str = Form("")):
+    gate = _require_admin(request)
+    if gate:
+        return gate
+    reject_kyc(user_id, note=note or "Documentos no válidos")
+    return RedirectResponse("/admin?tab=kyc", status_code=303)
+
+
+@app.post("/admin/kyc/{user_id}/quitar")
+def admin_kyc_revoke(request: Request, user_id: int, note: str = Form("")):
+    gate = _require_admin(request)
+    if gate:
+        return gate
+    revoke_kyc(user_id, note=note)
+    return RedirectResponse("/admin?tab=users", status_code=303)
+
+
+@app.post("/admin/listing/{listing_id}/eliminar")
+def admin_listing_delete(request: Request, listing_id: int):
+    gate = _require_admin(request)
+    if gate:
+        return gate
+    delete_listing(listing_id)
+    return RedirectResponse("/admin?tab=listings", status_code=303)
+
+
 @app.api_route("/api/health", methods=["GET", "HEAD"])
 def health():
     from db import backend_name
@@ -621,6 +828,8 @@ def health():
         "google": google_enabled(),
         "email": email_status(),
         "listings": count_active_listings(),
+        "users": count_users(),
+        "kyc_pending": count_kyc_pending(),
     }
 
 

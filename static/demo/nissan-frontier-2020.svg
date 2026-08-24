@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="420" viewBox="0 0 640 420">
+<rect width="640" height="420" fill="#854d0e"/>
+<rect y="260" width="640" height="160" fill="rgba(0,0,0,0.18)"/>
+<circle cx="180" cy="330" r="42" fill="#1a1a1a"/>
+<circle cx="180" cy="330" r="18" fill="#ccc"/>
+<circle cx="460" cy="330" r="42" fill="#1a1a1a"/>
+<circle cx="460" cy="330" r="18" fill="#ccc"/>
+<path d="M120 260 L170 180 L470 180 L520 260 Z" fill="rgba(255,255,255,0.22)"/>
+<text x="320" y="90" font-family="Arial, sans-serif" font-size="28" fill="rgba(255,255,255,0.85)" text-anchor="middle" font-weight="bold">Nissan Frontier 2020</text>
+</svg>

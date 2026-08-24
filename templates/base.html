@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="/static/style.css?v=6" />
+<link rel="stylesheet" href="/static/style.css?v=7" />
 {% block extra_head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -29,10 +29,15 @@
       <a href="/#como-funciona">Cómo funciona</a>
       <a href="/#contacto">Contacto</a>
       {% if me %}
+        {% if not can_publish %}
+        <a href="/verificacion">Verificarme</a>
+        {% endif %}
         <a href="/mis-publicaciones">Mis publicaciones</a>
         <a href="/mensajes">Mensajes</a>
+        {% if is_admin %}<a href="/admin">Panel</a>{% endif %}
         <a href="/salir" class="btn btn-ghost btn-sm">Salir</a>
       {% else %}
+        {% if is_admin %}<a href="/admin">Panel</a>{% endif %}
         <a href="/login">Entrar</a>
         <a class="btn btn-sm btn-cta" href="/registro">Crear cuenta</a>
       {% endif %}

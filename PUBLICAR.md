@@ -114,6 +114,12 @@ debe decir `"backend":"postgres"` y `"persistent":true`.
 
 ## 4. Correo (SendGrid)
 
+Clave del **dashboard** (tú verificas cédulas y das el ID de vendedor):
+
+- `MOTORCRIOLLO_ADMIN` = una clave larga solo tuya
+
+Panel: `https://www.motorcriollo.store/admin/entrar`
+
 En MotorCriollo → Environment pega:
 
 - `SENDGRID_API_KEY` = tu `SG.…`

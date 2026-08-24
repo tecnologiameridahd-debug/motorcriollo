@@ -374,7 +374,7 @@ main {
   flex: none;
 }
 .card-photo-wrap { position: relative; }
-.badge-sold, .badge-feat {
+.badge-sold, .badge-feat, .badge-ok {
   position: absolute;
   font-size: 11px;
   font-weight: 700;
@@ -389,6 +389,61 @@ main {
   top: auto;
   background: #ecfdf3;
   color: var(--green-dark);
+}
+.badge-ok {
+  right: 0;
+  top: 0;
+  background: #111;
+  color: var(--accent);
+}
+.verified-line { color: var(--green-dark); font-size: 13px; font-weight: 700; margin: 4px 0 8px; }
+.muted { color: var(--muted); font-size: 13px; }
+
+.kyc-wrap { max-width: 640px; }
+.kyc-lead { color: var(--muted); margin-top: 0; }
+.kyc-status { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+
+.admin-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.admin-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 8px 0 20px;
+}
+.admin-stats div {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+}
+.admin-stats strong { display: block; font-size: 28px; }
+.admin-stats span { color: var(--muted); font-size: 13px; }
+.admin-tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+.admin-tabs a {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid var(--line);
+  font-weight: 600;
+  font-size: 14px;
+}
+.admin-tabs a.is-on { background: #111; color: #fff; }
+.kyc-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.kyc-card header { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.kyc-photos { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0; }
+.kyc-photos img { width: 180px; height: 120px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
+.kyc-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.kyc-actions form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.kyc-actions input { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; min-width: 180px; }
+
+@media (max-width: 800px) {
+  .admin-stats { grid-template-columns: 1fr; }
 }
 
 .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
