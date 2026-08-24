@@ -11,12 +11,14 @@
     <div><strong>{{ stats.kyc_pending }}</strong><span>por verificar</span></div>
     <div><strong>{{ stats.users }}</strong><span>usuarios</span></div>
     <div><strong>{{ stats.listings }}</strong><span>carros activos</span></div>
+    <div><strong>{{ stats.deals_open or 0 }}</strong><span>pagos pendientes</span></div>
   </div>
 
   <nav class="admin-tabs">
     <a class="{% if tab == 'kyc' %}is-on{% endif %}" href="/admin?tab=kyc">Verificaciones</a>
     <a class="{% if tab == 'users' %}is-on{% endif %}" href="/admin?tab=users">Usuarios</a>
     <a class="{% if tab == 'listings' %}is-on{% endif %}" href="/admin?tab=listings">Publicaciones</a>
+    <a class="{% if tab == 'pagos' %}is-on{% endif %}" href="/admin?tab=pagos">Pagos / ventas</a>
   </nav>
 
   {% if tab == 'kyc' %}
@@ -100,6 +102,39 @@
         {% endfor %}
       </tbody>
     </table>
+  {% endif %}
+
+  {% if tab == 'pagos' %}
+    <h2>Ventas y comisiones (${{ commission }})</h2>
+    {% if deals %}
+    <table class="mylist">
+      <thead><tr><th>Carro</th><th>Vendedor</th><th>Comprador</th><th>Comisión</th><th>Estado</th><th></th></tr></thead>
+      <tbody>
+        {% for d in deals %}
+        <tr>
+          <td>{% if d.listing %}<a href="/listing/{{ d.listing.id }}">{{ d.listing.title }}</a>{% endif %}</td>
+          <td>{{ d.seller.name if d.seller else d.seller_id }}</td>
+          <td>{{ d.buyer.name if d.buyer else d.buyer_id }}</td>
+          <td>${{ d.commission }}</td>
+          <td>{{ d.status }}</td>
+          <td class="row-actions">
+            {% if d.proof_path %}<a class="btn btn-ghost btn-sm" href="{{ d.proof_path }}" target="_blank" rel="noopener">Comprobante</a>{% endif %}
+            {% if d.status in ('accepted','proof') %}
+            <form method="post" action="/admin/deal/{{ d.id }}/pagado">
+              <button class="btn btn-sm" type="submit">Confirmar pago</button>
+            </form>
+            <form method="post" action="/admin/deal/{{ d.id }}/cancelar">
+              <button class="btn btn-ghost btn-sm" type="submit">Cancelar</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">Aún no hay ventas aceptadas.</p>
+    {% endif %}
   {% endif %}
 
   {% if tab == 'listings' %}

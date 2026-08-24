@@ -21,7 +21,7 @@ BRANDS = [
 TRANSMISSIONS = ["Automática", "Manual"]
 FUEL_TYPES = ["Gasolina", "Diésel", "Híbrido", "Eléctrico", "GLP/GNV"]
 CONDITIONS = ["Nuevo", "Usado - excelente", "Usado - bueno", "Usado - regular", "Para repuestos"]
-STATUSES = ["active", "sold", "inactive"]
+STATUSES = ["active", "sold", "inactive", "reserved"]
 
 
 def _now() -> str:
@@ -87,6 +87,33 @@ def init_db() -> None:
         """CREATE TABLE IF NOT EXISTS admin_sessions (
             token TEXT PRIMARY KEY,
             expires_at INTEGER NOT NULL)""",
+        f"""CREATE TABLE IF NOT EXISTS conversations (
+            id {pk},
+            listing_id INTEGER NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+            buyer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            seller_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(listing_id, buyer_id))""",
+        f"""CREATE TABLE IF NOT EXISTS chat_messages (
+            id {pk},
+            conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            body TEXT NOT NULL,
+            created_at TEXT NOT NULL)""",
+        f"""CREATE TABLE IF NOT EXISTS deals (
+            id {pk},
+            conversation_id INTEGER NOT NULL UNIQUE REFERENCES conversations(id) ON DELETE CASCADE,
+            listing_id INTEGER NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+            buyer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            seller_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            price INTEGER NOT NULL,
+            commission INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'accepted',
+            proof_path TEXT DEFAULT '',
+            note TEXT DEFAULT '',
+            created_at TEXT NOT NULL,
+            paid_at TEXT DEFAULT '')""",
     ):
         con.execute(stmt)
     for col, decl in (
@@ -734,6 +761,254 @@ def list_seller_messages(seller_id: int, limit: int = 50) -> list[dict[str, Any]
 def count_users() -> int:
     con = connect()
     r = execute(con, "SELECT COUNT(*) AS n FROM users").fetchone()
+    con.close()
+    return int(getv(r, "n") or 0)
+
+
+# ------------------------------------------------------- chat / deals ----
+
+def get_or_create_conversation(listing_id: int, buyer_id: int, seller_id: int) -> dict[str, Any]:
+    if int(buyer_id) == int(seller_id):
+        raise ValueError("No puedes escribirte a ti mismo")
+    con = connect()
+    row = execute(
+        con,
+        "SELECT * FROM conversations WHERE listing_id=? AND buyer_id=?",
+        (listing_id, buyer_id),
+    ).fetchone()
+    if row:
+        con.close()
+        return dict(row)
+    now = _now()
+    cid = insert_id(
+        con,
+        """
+        INSERT INTO conversations(listing_id, buyer_id, seller_id, created_at, updated_at)
+        VALUES(?,?,?,?,?)
+        """,
+        (listing_id, buyer_id, seller_id, now, now),
+    )
+    con.commit()
+    con.close()
+    return get_conversation(cid)
+
+
+def get_conversation(cid: int) -> dict[str, Any] | None:
+    con = connect()
+    row = execute(con, "SELECT * FROM conversations WHERE id=?", (cid,)).fetchone()
+    con.close()
+    return dict(row) if row else None
+
+
+def touch_conversation(cid: int) -> None:
+    con = connect()
+    execute(con, "UPDATE conversations SET updated_at=? WHERE id=?", (_now(), cid))
+    con.commit()
+    con.close()
+
+
+def add_chat_message(conversation_id: int, user_id: int, body: str) -> dict[str, Any]:
+    body = (body or "").strip()[:2000]
+    if not body:
+        raise ValueError("Escribe un mensaje")
+    convo = get_conversation(conversation_id)
+    if not convo:
+        raise ValueError("Conversación no existe")
+    if int(user_id) not in (int(convo["buyer_id"]), int(convo["seller_id"])):
+        raise ValueError("No eres parte de este chat")
+    con = connect()
+    mid = insert_id(
+        con,
+        "INSERT INTO chat_messages(conversation_id, user_id, body, created_at) VALUES(?,?,?,?)",
+        (conversation_id, user_id, body, _now()),
+    )
+    con.commit()
+    con.close()
+    touch_conversation(conversation_id)
+    return {"id": mid, "conversation_id": conversation_id, "user_id": user_id, "body": body}
+
+
+def list_chat_messages(conversation_id: int, limit: int = 200) -> list[dict[str, Any]]:
+    con = connect()
+    rows = execute(
+        con,
+        "SELECT * FROM chat_messages WHERE conversation_id=? ORDER BY id ASC LIMIT ?",
+        (conversation_id, limit),
+    ).fetchall()
+    con.close()
+    return [dict(r) for r in rows]
+
+
+def list_conversations(user_id: int, limit: int = 80) -> list[dict[str, Any]]:
+    con = connect()
+    rows = execute(
+        con,
+        """
+        SELECT * FROM conversations
+        WHERE buyer_id=? OR seller_id=?
+        ORDER BY updated_at DESC LIMIT ?
+        """,
+        (user_id, user_id, limit),
+    ).fetchall()
+    con.close()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["listing"] = get_listing(d["listing_id"])
+        other_id = d["seller_id"] if int(d["buyer_id"]) == int(user_id) else d["buyer_id"]
+        d["other"] = get_user(other_id)
+        d["deal"] = get_deal_by_conversation(d["id"])
+        last = execute_last_message(d["id"])
+        d["last_body"] = (last or {}).get("body") or ""
+        out.append(d)
+    return out
+
+
+def execute_last_message(conversation_id: int) -> dict[str, Any] | None:
+    con = connect()
+    row = execute(
+        con,
+        "SELECT * FROM chat_messages WHERE conversation_id=? ORDER BY id DESC LIMIT 1",
+        (conversation_id,),
+    ).fetchone()
+    con.close()
+    return dict(row) if row else None
+
+
+def get_deal_by_conversation(conversation_id: int) -> dict[str, Any] | None:
+    con = connect()
+    row = execute(
+        con, "SELECT * FROM deals WHERE conversation_id=?", (conversation_id,)
+    ).fetchone()
+    con.close()
+    return dict(row) if row else None
+
+
+def get_deal(deal_id: int) -> dict[str, Any] | None:
+    con = connect()
+    row = execute(con, "SELECT * FROM deals WHERE id=?", (deal_id,)).fetchone()
+    con.close()
+    return dict(row) if row else None
+
+
+def listing_open_deal(listing_id: int) -> dict[str, Any] | None:
+    con = connect()
+    row = execute(
+        con,
+        "SELECT * FROM deals WHERE listing_id=? AND status IN ('accepted','proof') LIMIT 1",
+        (listing_id,),
+    ).fetchone()
+    con.close()
+    return dict(row) if row else None
+
+
+def accept_deal(conversation_id: int, seller_id: int, commission: int) -> dict[str, Any]:
+    convo = get_conversation(conversation_id)
+    if not convo:
+        raise ValueError("Conversación no existe")
+    if int(convo["seller_id"]) != int(seller_id):
+        raise ValueError("Solo el vendedor puede aceptar")
+    listing = get_listing(convo["listing_id"])
+    if not listing or listing.get("status") not in ("active", "reserved"):
+        raise ValueError("Este anuncio ya no está en venta")
+    existing = get_deal_by_conversation(conversation_id)
+    if existing and existing.get("status") in ("accepted", "proof", "paid"):
+        return existing
+    other = listing_open_deal(convo["listing_id"])
+    if other:
+        raise ValueError("Ya hay una venta en proceso en este carro")
+    con = connect()
+    did = insert_id(
+        con,
+        """
+        INSERT INTO deals(conversation_id, listing_id, buyer_id, seller_id, price,
+                          commission, status, created_at)
+        VALUES(?,?,?,?,?,?,?,?)
+        """,
+        (
+            conversation_id, convo["listing_id"], convo["buyer_id"], convo["seller_id"],
+            int(listing["price"]), int(commission), "accepted", _now(),
+        ),
+    )
+    con.commit()
+    con.close()
+    update_listing(convo["listing_id"], status="reserved")
+    return get_deal(did)
+
+
+def set_deal_proof(deal_id: int, path: str) -> dict[str, Any] | None:
+    con = connect()
+    execute(
+        con,
+        "UPDATE deals SET status='proof', proof_path=? WHERE id=?",
+        ((path or "")[:220], deal_id),
+    )
+    con.commit()
+    con.close()
+    return get_deal(deal_id)
+
+
+def confirm_deal_paid(deal_id: int) -> dict[str, Any] | None:
+    deal = get_deal(deal_id)
+    if not deal:
+        return None
+    con = connect()
+    execute(
+        con,
+        "UPDATE deals SET status='paid', paid_at=? WHERE id=?",
+        (_now(), deal_id),
+    )
+    con.commit()
+    con.close()
+    update_listing(deal["listing_id"], status="sold")
+    return get_deal(deal_id)
+
+
+def cancel_deal(deal_id: int) -> dict[str, Any] | None:
+    deal = get_deal(deal_id)
+    if not deal:
+        return None
+    con = connect()
+    execute(con, "UPDATE deals SET status='cancelled' WHERE id=?", (deal_id,))
+    con.commit()
+    con.close()
+    listing = get_listing(deal["listing_id"])
+    if listing and listing.get("status") == "reserved":
+        update_listing(deal["listing_id"], status="active")
+    return get_deal(deal_id)
+
+
+def list_deals(status: str | None = None, limit: int = 80) -> list[dict[str, Any]]:
+    con = connect()
+    if status:
+        rows = execute(
+            con,
+            "SELECT * FROM deals WHERE status=? ORDER BY created_at DESC LIMIT ?",
+            (status, limit),
+        ).fetchall()
+    else:
+        rows = execute(
+            con,
+            "SELECT * FROM deals ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    con.close()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["listing"] = get_listing(d["listing_id"])
+        d["seller"] = get_user(d["seller_id"])
+        d["buyer"] = get_user(d["buyer_id"])
+        out.append(d)
+    return out
+
+
+def count_deals_open() -> int:
+    con = connect()
+    r = execute(
+        con,
+        "SELECT COUNT(*) AS n FROM deals WHERE status IN ('accepted','proof')",
+    ).fetchone()
     con.close()
     return int(getv(r, "n") or 0)
 

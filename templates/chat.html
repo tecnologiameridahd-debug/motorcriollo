@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Chat · {{ listing.title if listing else "MotorCriollo" }}{% endblock %}
+{% block content %}
+<div class="chat-page">
+  <a class="muted" href="/mensajes">← Mensajes</a>
+  {% if listing %}
+  <h1 class="page-title"><a href="/listing/{{ listing.id }}">{{ listing.title }}</a></h1>
+  <p class="muted">{{ other.name if other else "Usuario" }} · ${{ "{:,}".format(listing.price).replace(",", ".") }}</p>
+  {% endif %}
+
+  {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+  {% if deal %}
+  <div class="deal-box">
+    {% if deal.status == 'accepted' %}
+      <strong>Venta aceptada.</strong> El vendedor debe pagar <strong>${{ deal.commission }}</strong> a MotorCriollo.
+      <p>{{ pay_info }}</p>
+    {% elif deal.status == 'proof' %}
+      <strong>Comprobante enviado.</strong> Administración está revisando el pago de ${{ deal.commission }}.
+    {% elif deal.status == 'paid' %}
+      <div class="alert alert-ok">Comisión pagada. Trato cerrado en MotorCriollo.</div>
+    {% elif deal.status == 'cancelled' %}
+      <p>Esta venta se canceló.</p>
+    {% endif %}
+    {% if i_am_seller and deal.status in ('accepted','proof') %}
+      {% if deal.proof_path %}
+      <p><a href="{{ deal.proof_path }}" target="_blank" rel="noopener">Ver comprobante</a></p>
+      {% endif %}
+      <form class="stack" method="post" action="/c/{{ convo.id }}/comprobante" enctype="multipart/form-data">
+        <div class="field">
+          <label>Comprobante de pago (captura)</label>
+          <input type="file" name="proof" accept="image/*" required />
+        </div>
+        <button class="btn" type="submit">Subir comprobante de ${{ deal.commission }}</button>
+      </form>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <div class="chat-log">
+    {% for m in messages %}
+    <div class="bubble {% if me and m.user_id == me.id %}mine{% endif %}">
+      <div class="bubble-body">{{ m.body }}</div>
+      <div class="bubble-time">{{ m.created_at[:16].replace('T', ' ') }}</div>
+    </div>
+    {% else %}
+    <p class="muted">Escribe el primer mensaje. El trato se hace aquí, en la página.</p>
+    {% endfor %}
+  </div>
+
+  {% if listing and listing.status != 'sold' %}
+  <form class="chat-form" method="post" action="/c/{{ convo.id }}/mensaje">
+    <textarea name="body" required maxlength="2000" placeholder="Escribe aquí…"></textarea>
+    <button class="btn" type="submit">Enviar</button>
+  </form>
+  {% if i_am_seller and not deal %}
+  <form method="post" action="/c/{{ convo.id }}/aceptar" onsubmit="return confirm('¿Aceptar esta venta? Deberás pagar ${{ commission }} a MotorCriollo.')">
+    <button class="btn btn-cta" type="submit">Aceptar venta (${{ commission }} de comisión)</button>
+  </form>
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

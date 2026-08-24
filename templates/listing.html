@@ -53,6 +53,7 @@
     <div class="detail-price">${{ "{:,}".format(listing.price).replace(",", ".") }}</div>
     <div class="detail-title">{{ listing.brand }} {{ listing.model }} {{ listing.year }}</div>
     {% if listing.status == 'sold' %}<span class="status-pill status-sold">VENDIDO</span>{% endif %}
+    {% if listing.status == 'reserved' %}<span class="status-pill status-inactive">VENTA EN PROCESO</span>{% endif %}
 
     <ul class="spec-list">
       <li><span>Año</span><span>{{ listing.year }}</span></li>
@@ -68,35 +69,18 @@
       {% if listing.seller_verified %}
       <p class="verified-line">Nivel {{ listing.verify_level }} · {{ listing.seller_code }}</p>
       {% endif %}
-      {% if listing.phone %}
-      <p style="margin:6px 0"><a class="btn btn-block" href="https://wa.me/{{ listing.phone|replace(' ', '')|replace('+', '')|replace('-', '') }}" target="_blank" rel="noopener">Contactar por WhatsApp</a></p>
-      <p style="margin:6px 0;color:var(--muted);font-size:13px">Tel: {{ listing.phone }}</p>
-      {% endif %}
     </div>
 
-    {% if sent %}
-    <div class="alert alert-ok" style="margin-top:16px">Tu mensaje fue enviado al vendedor.</div>
+    {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+    {% if listing.status == 'sold' %}
+      <p class="muted">Este carro ya se vendió.</p>
+    {% elif listing.status == 'reserved' %}
+      <p class="muted">Hay una venta en proceso. El vendedor está pagando la comisión a MotorCriollo.</p>
+    {% elif me and me.id == listing.user_id %}
+      <a class="btn btn-block" href="/mensajes">Ver mensajes de este anuncio</a>
     {% else %}
-    <form method="post" action="/listing/{{ listing.id }}/contactar" class="stack" style="margin-top:16px">
-      {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
-      <div class="field">
-        <label>Tu nombre</label>
-        <input type="text" name="buyer_name" required maxlength="60" value="{{ me.name if me else '' }}" />
-      </div>
-      <div class="field">
-        <label>Tu correo (opcional)</label>
-        <input type="email" name="buyer_email" maxlength="120" value="{{ me.email if me else '' }}" />
-      </div>
-      <div class="field">
-        <label>Tu teléfono (opcional)</label>
-        <input type="text" name="buyer_phone" maxlength="30" value="{{ me.phone if me else '' }}" />
-      </div>
-      <div class="field">
-        <label>Mensaje</label>
-        <textarea name="message" required maxlength="1000" placeholder="Hola, ¿sigue disponible el carro?"></textarea>
-      </div>
-      <button class="btn btn-block" type="submit">Contactar vendedor</button>
-    </form>
+      <a class="btn btn-block" href="/chat/{{ listing.id }}">Hablar en la página</a>
+      <p class="muted" style="margin-top:8px">El contacto es por MotorCriollo. Si cierran, el vendedor paga ${{ commission }} de comisión.</p>
     {% endif %}
   </div>
 </div>

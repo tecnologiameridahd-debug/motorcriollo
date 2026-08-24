@@ -13,9 +13,11 @@ from fastapi.templating import Jinja2Templates
 
 from config import (
     BASE_DIR,
+    COMMISSION_USD,
     KYC_DIR,
     MAX_PHOTOS,
     OAUTH_STATE_COOKIE,
+    PAY_INFO,
     PERSISTENT,
     PORT,
     PUBLIC_BASE_URL,
@@ -41,13 +43,17 @@ from storage import (
     CONDITIONS,
     FUEL_TYPES,
     TRANSMISSIONS,
-    add_buyer_message,
+    accept_deal,
+    add_chat_message,
     add_listing_photo,
     admin_from_token,
     approve_kyc,
     browse_listings,
     can_publish,
+    cancel_deal,
+    confirm_deal_paid,
     count_active_listings,
+    count_deals_open,
     count_kyc_pending,
     count_users,
     create_admin_session,
@@ -58,19 +64,26 @@ from storage import (
     delete_listing,
     delete_session,
     delete_user,
+    get_conversation,
+    get_deal,
+    get_deal_by_conversation,
     get_listing,
+    get_or_create_conversation,
     get_user,
     get_user_by_email,
     init_db,
     list_all_listings,
+    list_chat_messages,
+    list_conversations,
+    list_deals,
     list_kyc,
-    list_seller_messages,
     list_user_listings,
     list_users_admin,
     login,
     make_email_token,
     reject_kyc,
     revoke_kyc,
+    set_deal_proof,
     set_password,
     submit_kyc,
     take_email_token,
@@ -114,6 +127,8 @@ def _page(request: Request, name: str, **ctx):
     ctx.setdefault("transmissions", TRANSMISSIONS)
     ctx.setdefault("fuel_types", FUEL_TYPES)
     ctx.setdefault("conditions", CONDITIONS)
+    ctx.setdefault("commission", COMMISSION_USD)
+    ctx.setdefault("pay_info", PAY_INFO)
     return templates.TemplateResponse(request, name, ctx)
 
 
@@ -270,41 +285,89 @@ def listing_detail(request: Request, listing_id: int):
     return _page(request, "listing.html", listing=listing, seller=seller)
 
 
-@app.post("/listing/{listing_id}/contactar")
-async def contactar_vendedor(
-    request: Request,
-    listing_id: int,
-    buyer_name: str = Form(...),
-    buyer_email: str = Form(""),
-    buyer_phone: str = Form(""),
-    message: str = Form(...),
-):
+@app.get("/chat/{listing_id}")
+def chat_start(request: Request, listing_id: int):
+    user = me(request)
+    if not user:
+        return RedirectResponse(f"/login?next=/chat/{listing_id}", status_code=302)
     listing = get_listing(listing_id)
     if not listing:
         return RedirectResponse("/", status_code=302)
-    seller = get_user(listing["user_id"])
+    if int(user["id"]) == int(listing["user_id"]):
+        return RedirectResponse("/mensajes", status_code=302)
     try:
-        add_buyer_message(
-            listing_id=listing_id,
-            seller_id=listing["user_id"],
-            buyer_name=buyer_name,
-            buyer_email=buyer_email,
-            buyer_phone=buyer_phone,
-            message=message,
+        convo = get_or_create_conversation(listing_id, user["id"], listing["user_id"])
+    except ValueError as e:
+        return _page(request, "listing.html", listing=listing, seller=get_user(listing["user_id"]), error=str(e))
+    return RedirectResponse(f"/c/{convo['id']}", status_code=302)
+
+
+@app.get("/c/{cid}", response_class=HTMLResponse)
+def chat_view(request: Request, cid: int, error: str = ""):
+    user = me(request)
+    if not user:
+        return RedirectResponse("/login?next=/mensajes", status_code=302)
+    convo = get_conversation(cid)
+    if not convo or int(user["id"]) not in (int(convo["buyer_id"]), int(convo["seller_id"])):
+        return RedirectResponse("/mensajes", status_code=302)
+    listing = get_listing(convo["listing_id"])
+    other_id = convo["seller_id"] if int(user["id"]) == int(convo["buyer_id"]) else convo["buyer_id"]
+    return _page(
+        request,
+        "chat.html",
+        convo=convo,
+        listing=listing,
+        other=get_user(other_id),
+        messages=list_chat_messages(cid),
+        deal=get_deal_by_conversation(cid),
+        i_am_seller=int(user["id"]) == int(convo["seller_id"]),
+        error=error,
+    )
+
+
+@app.post("/c/{cid}/mensaje")
+def chat_send(request: Request, cid: int, body: str = Form(...)):
+    user = me(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    try:
+        add_chat_message(cid, user["id"], body)
+    except ValueError:
+        return RedirectResponse(f"/c/{cid}", status_code=303)
+    return RedirectResponse(f"/c/{cid}", status_code=303)
+
+
+@app.post("/c/{cid}/aceptar")
+def chat_accept(request: Request, cid: int):
+    user = me(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    try:
+        accept_deal(cid, user["id"], COMMISSION_USD)
+        add_chat_message(
+            cid, user["id"],
+            f"Acepté la venta. Debo pagar ${COMMISSION_USD} de comisión a MotorCriollo para cerrar.",
         )
     except ValueError as e:
-        return _page(request, "listing.html", listing=listing, seller=seller, error=str(e))
+        return chat_view(request, cid, error=str(e))
+    return RedirectResponse(f"/c/{cid}", status_code=303)
 
-    if seller and email_ready() and seller.get("email"):
-        def _run():
-            send_buyer_message(
-                seller["email"], seller.get("name") or "vendedor", listing["title"],
-                listing_id, buyer_name, buyer_email, buyer_phone, message,
-            )
 
-        threading.Thread(target=_run, name="mc-mail-buyer", daemon=True).start()
-
-    return _page(request, "listing.html", listing=listing, seller=seller, sent=True)
+@app.post("/c/{cid}/comprobante")
+async def chat_proof(request: Request, cid: int, proof: UploadFile = File(None)):
+    user = me(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    convo = get_conversation(cid)
+    deal = get_deal_by_conversation(cid)
+    if not convo or not deal or int(user["id"]) != int(convo["seller_id"]):
+        return RedirectResponse("/mensajes", status_code=302)
+    path = await _save_photo(deal["listing_id"], proof)
+    if not path:
+        return chat_view(request, cid, error="Sube una foto o captura del pago")
+    set_deal_proof(deal["id"], path)
+    add_chat_message(cid, user["id"], "Subí el comprobante de la comisión. Administración lo revisa.")
+    return RedirectResponse(f"/c/{cid}", status_code=303)
 
 
 # ----------------------------------------------------------- publicar ----
@@ -509,14 +572,7 @@ def mensajes(request: Request):
     user = me(request)
     if not user:
         return RedirectResponse("/login?next=/mensajes", status_code=302)
-    msgs = list_seller_messages(user["id"])
-    listing_cache: dict[int, dict] = {}
-    for m in msgs:
-        lid = m["listing_id"]
-        if lid not in listing_cache:
-            listing_cache[lid] = get_listing(lid)
-        m["listing"] = listing_cache[lid]
-    return _page(request, "mensajes.html", messages=msgs)
+    return _page(request, "mensajes.html", convos=list_conversations(user["id"]))
 
 
 # --------------------------------------------------------------- auth ----
@@ -782,11 +838,13 @@ def admin_home(request: Request, tab: str = "kyc"):
             "listings": count_active_listings(),
             "users": count_users(),
             "kyc_pending": count_kyc_pending(),
+            "deals_open": count_deals_open(),
         },
         pending=pending,
         reviewed=[u for u in reviewed if u.get("kyc_status") != "pending"],
         users=list_users_admin(),
         listings=list_all_listings(),
+        deals=list_deals(),
     )
 
 
@@ -834,6 +892,24 @@ def admin_kyc_revoke(request: Request, user_id: int, note: str = Form("")):
         return gate
     revoke_kyc(user_id, note=note)
     return RedirectResponse("/admin?tab=users", status_code=303)
+
+
+@app.post("/admin/deal/{deal_id}/pagado")
+def admin_deal_paid(request: Request, deal_id: int):
+    gate = _require_admin(request)
+    if gate:
+        return gate
+    confirm_deal_paid(deal_id)
+    return RedirectResponse("/admin?tab=pagos", status_code=303)
+
+
+@app.post("/admin/deal/{deal_id}/cancelar")
+def admin_deal_cancel(request: Request, deal_id: int):
+    gate = _require_admin(request)
+    if gate:
+        return gate
+    cancel_deal(deal_id)
+    return RedirectResponse("/admin?tab=pagos", status_code=303)
 
 
 @app.post("/admin/listing/{listing_id}/inspeccion")

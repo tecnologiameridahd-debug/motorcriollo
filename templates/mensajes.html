@@ -2,35 +2,34 @@
 {% block title %}Mensajes — MotorCriollo{% endblock %}
 {% block content %}
 <h1 class="page-title">Mensajes</h1>
+<p class="muted">El trato es por la página. Si el vendedor acepta, paga la comisión a MotorCriollo y administración confirma.</p>
 
-{% if messages %}
+{% if convos %}
 <div class="msg-list">
-  {% for m in messages %}
-  <div class="msg-card">
+  {% for c in convos %}
+  <a class="msg-card msg-link" href="/c/{{ c.id }}">
     <div class="msg-head">
       <div>
-        <span class="msg-buyer">{{ m.buyer_name }}</span>
-        <span class="msg-date">{{ m.created_at[:16].replace('T', ' ') }}</span>
+        <span class="msg-buyer">{{ c.other.name if c.other else "Usuario" }}</span>
+        <span class="msg-date">{{ (c.updated_at or '')[:16].replace('T', ' ') }}</span>
       </div>
-      {% if m.listing %}
-      <a class="msg-listing" href="/listing/{{ m.listing.id }}">{{ m.listing.title }}</a>
+      {% if c.listing %}
+      <span class="msg-listing">{{ c.listing.title }}</span>
       {% endif %}
     </div>
-    <p class="msg-body">{{ m.message }}</p>
-    <div class="msg-actions">
-      {% if m.buyer_phone %}
-      <a class="btn btn-sm" href="https://wa.me/{{ m.buyer_phone|replace(' ', '')|replace('+', '')|replace('-', '') }}" target="_blank" rel="noopener">Responder por WhatsApp</a>
+    <p class="msg-body">{{ c.last_body or "Sin mensajes aún" }}</p>
+    {% if c.deal %}
+      {% if c.deal.status == 'accepted' %}<span class="status-pill status-inactive">Pendiente de pago</span>
+      {% elif c.deal.status == 'proof' %}<span class="status-pill status-inactive">Comprobante en revisión</span>
+      {% elif c.deal.status == 'paid' %}<span class="status-pill status-active">Pagado / cerrado</span>
       {% endif %}
-      {% if m.buyer_email %}
-      <a class="btn btn-ghost btn-sm" href="mailto:{{ m.buyer_email }}">Responder por correo</a>
-      {% endif %}
-    </div>
-  </div>
+    {% endif %}
+  </a>
   {% endfor %}
 </div>
 {% else %}
 <div class="empty">
-  <p>Todavía no tienes mensajes de compradores.</p>
+  <p>Todavía no tienes chats. Entra a un carro y pulsa “Hablar en la página”.</p>
   <a class="btn" href="/">Ver publicaciones</a>
 </div>
 {% endif %}

@@ -406,7 +406,7 @@ main {
 .admin-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .admin-stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
   margin: 8px 0 20px;
 }
@@ -717,4 +717,26 @@ table.mylist img { width: 64px; height: 48px; object-fit: cover; border-radius: 
 
 @media (max-width: 800px) {
   .promises, .docs-grid { grid-template-columns: 1fr; }
+  .admin-stats { grid-template-columns: 1fr 1fr; }
+}
+
+.msg-link { display: block; color: inherit; }
+.msg-link:hover { text-decoration: none; border-color: #111; }
+
+.chat-page { max-width: 720px; }
+.chat-log {
+  background: #fff; border: 1px solid var(--line); border-radius: 16px;
+  padding: 16px; min-height: 280px; display: flex; flex-direction: column; gap: 10px;
+  margin: 14px 0;
+}
+.bubble {
+  max-width: 80%; background: #f3f4f6; border-radius: 14px; padding: 10px 12px;
+}
+.bubble.mine { margin-left: auto; background: #111; color: #fff; }
+.bubble-time { font-size: 11px; opacity: .6; margin-top: 4px; }
+.chat-form { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 12px; }
+.chat-form textarea { flex: 1; min-height: 70px; border-radius: 12px; border: 1px solid var(--line); padding: 10px; font-family: inherit; }
+.deal-box {
+  background: #fff7ed; border: 1px solid #fdba74; border-radius: 14px;
+  padding: 14px 16px; margin: 12px 0;
 }

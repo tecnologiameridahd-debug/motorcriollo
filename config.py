@@ -33,6 +33,25 @@ SESSION_COOKIE = "mc_session"
 OAUTH_STATE_COOKIE = "mc_oauth"
 SESSION_DAYS = 30
 MAX_PHOTOS = 8
+COMMISSION_USD = int(os.environ.get("MOTORCRIOLLO_COMMISSION") or "20")
+PAY_INFO = (
+    os.environ.get("MOTORCRIOLLO_PAY_INFO")
+    or "Paga la comisión a MotorCriollo por Zelle o Pago Móvil y sube el comprobante. "
+       "Administración confirma el pago y se cierra la venta."
+)
+try:
+    from config_local import COMMISSION_USD as _CUSD
+
+    COMMISSION_USD = int(_CUSD or COMMISSION_USD)
+except Exception:
+    pass
+try:
+    from config_local import PAY_INFO as _PAY
+
+    if _PAY:
+        PAY_INFO = str(_PAY)
+except Exception:
+    pass
 
 GOOGLE_CLIENT_ID = os.environ.get("MOTORCRIOLLO_GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.environ.get("MOTORCRIOLLO_GOOGLE_CLIENT_SECRET", "")

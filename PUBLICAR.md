@@ -117,6 +117,8 @@ debe decir `"backend":"postgres"` y `"persistent":true`.
 Clave del **dashboard** (tú verificas cédulas y das el ID de vendedor):
 
 - `MOTORCRIOLLO_ADMIN` = una clave larga solo tuya
+- `MOTORCRIOLLO_COMMISSION` = `20` (USD que paga el vendedor al cerrar)
+- `MOTORCRIOLLO_PAY_INFO` = texto con Zelle / Pago Móvil para que paguen
 
 Panel: `https://www.motorcriollo.store/admin/entrar`
 
