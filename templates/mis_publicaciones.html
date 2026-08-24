@@ -14,7 +14,7 @@
     <tr>
       <td>{% if l.photo %}<img src="{{ l.photo }}" alt="" />{% endif %}</td>
       <td><a href="/listing/{{ l.id }}">{{ l.title }}</a></td>
-      <td>${{ "{:,}".format(l.price) }}</td>
+      <td>${{ "{:,}".format(l.price).replace(",", ".") }}</td>
       <td>
         <span class="status-pill status-{{ l.status }}">
           {% if l.status == 'active' %}Activo{% elif l.status == 'sold' %}Vendido{% else %}Pausado{% endif %}

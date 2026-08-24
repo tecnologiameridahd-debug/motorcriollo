@@ -1,89 +1,200 @@
 {% extends "base.html" %}
 {% block title %}MotorCriollo — carros usados en venta{% endblock %}
-{% block content %}
-<div class="hero">
-  <svg class="hero-mark" viewBox="0 0 64 64" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M8 32 C14 22 24 16 36 15 C46 14 53 17 57 22 C59 25 59 28 56.5 30"/>
-    <path d="M6 33.5 L16 32.3 L48 30.6 L58 32.6"/>
-  </svg>
-  <div class="hero-inner">
-    <h1>Encuentra tu próximo <span class="accent">carro</span></h1>
-    <p>{{ total }} publicaciones activas · compra y vende directo, sin intermediarios.</p>
+{% block body_class %}page-home{% endblock %}
+{% block before_main %}
+{% set searching = filters.q or filters.brand or filters.price_min or filters.price_max or filters.year_min or filters.year_max or filters.city %}
+<section class="hero">
+  <div class="hero-bg" role="img" aria-label="Carro negro al atardecer con la bandera de Venezuela"></div>
+  <div class="hero-shade"></div>
+  <div class="wrap hero-copy">
+    <h1>Encuentra tu<br>próximo <em>carro</em></h1>
+    <p class="hero-lead">Compra y vende directo, sin intermediarios.</p>
+    <ul class="hero-stats">
+      <li>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13l2-5h14l2 5M5 13v5h2v-2h10v2h2v-5M7 16h.01M17 16h.01"/></svg>
+        <span><strong>{{ total }}</strong> publicaciones activas</span>
+      </li>
+      <li>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7l8-4z"/></svg>
+        <span>Trato directo</span>
+      </li>
+      <li>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM12 8v4l3 2"/></svg>
+        <span>Soporte real</span>
+      </li>
+    </ul>
   </div>
-</div>
-
-<div class="search-card">
-  <form method="get" action="/">
-    <div class="field">
-      <label>Buscar</label>
-      <input type="text" name="q" value="{{ filters.q }}" placeholder="Marca, modelo o palabra clave" />
-    </div>
-    <div class="field">
-      <label>Marca</label>
-      <select name="brand">
-        <option value="">Todas</option>
-        {% for b in brands %}
-        <option value="{{ b }}" {% if filters.brand == b %}selected{% endif %}>{{ b }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="field">
-      <label>Precio mín.</label>
-      <input type="number" name="price_min" value="{{ filters.price_min }}" min="0" />
-    </div>
-    <div class="field">
-      <label>Precio máx.</label>
-      <input type="number" name="price_max" value="{{ filters.price_max }}" min="0" />
-    </div>
-    <div class="field">
-      <label>Año mín.</label>
-      <input type="number" name="year_min" value="{{ filters.year_min }}" min="1950" />
-    </div>
-    <div class="field">
-      <label>Año máx.</label>
-      <input type="number" name="year_max" value="{{ filters.year_max }}" min="1950" />
-    </div>
-    <div class="field">
-      <label>Ciudad</label>
-      <input type="text" name="city" value="{{ filters.city }}" placeholder="Caracas, Maracaibo..." />
-    </div>
-    <div class="filters-actions">
-      <button class="btn btn-search" type="submit">Buscar {{ total }} vehículos</button>
-      <a class="btn btn-ghost" href="/">Limpiar</a>
-    </div>
-  </form>
-</div>
-
-{% if listings %}
-<div class="grid">
-  {% for l in listings %}
-  <div class="card">
-    <a class="card-link" href="/listing/{{ l.id }}">
-      <div class="card-photo-wrap">
-        {% if l.status == 'sold' %}<span class="badge-sold">VENDIDO</span>{% endif %}
-        {% if l.photo %}
-        <img class="card-photo" src="{{ l.photo }}" alt="{{ l.title }}" />
-        {% else %}
-        <div class="card-photo"></div>
-        {% endif %}
+  <div class="wrap">
+    <div class="search-card">
+      <div class="search-head">
+        <label class="search-title" for="q">Busca el carro ideal para ti</label>
+        <span class="search-hint">Filtros</span>
       </div>
-      <div class="card-body">
-        <div class="card-title">{{ l.title }}</div>
-        <div class="card-meta">
-          <span class="meta-item"><svg viewBox="0 0 24 24"><path d="M4 10h16M8 4v4M16 4v4M5 8h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/></svg>{{ l.year }}</span>
-          <span class="meta-item"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 12l4 -2"/></svg>{{ "{:,}".format(l.mileage) }} mi</span>
-          <span class="meta-item"><svg viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>{{ l.city }}</span>
+      <form method="get" action="/">
+        <div class="search-grid">
+          <div class="field field-grow">
+            <label for="q">Buscar</label>
+            <input id="q" type="text" name="q" value="{{ filters.q }}" placeholder="Marca, modelo o palabra clave..." />
+          </div>
+          <div class="field">
+            <label for="brand">Marca</label>
+            <select id="brand" name="brand">
+              <option value="">Todas</option>
+              {% for b in brands %}
+              <option value="{{ b }}" {% if filters.brand == b %}selected{% endif %}>{{ b }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label for="price_min">Precio mín.</label>
+            <input id="price_min" type="number" name="price_min" value="{{ filters.price_min }}" min="0" placeholder="Ej: 3000" />
+          </div>
+          <div class="field">
+            <label for="price_max">Precio máx.</label>
+            <input id="price_max" type="number" name="price_max" value="{{ filters.price_max }}" min="0" placeholder="Ej: 25000" />
+          </div>
+          <div class="field">
+            <label for="year_min">Año mín.</label>
+            <input id="year_min" type="number" name="year_min" value="{{ filters.year_min }}" min="1950" placeholder="Ej: 2010" />
+          </div>
+          <div class="field">
+            <label for="year_max">Año máx.</label>
+            <input id="year_max" type="number" name="year_max" value="{{ filters.year_max }}" min="1950" placeholder="Ej: 2024" />
+          </div>
+          <div class="field field-full">
+            <label for="city">Ciudad</label>
+            <input id="city" type="text" name="city" value="{{ filters.city }}" placeholder="Caracas, Maracaibo..." />
+          </div>
         </div>
-        <div class="card-price">${{ "{:,}".format(l.price) }}</div>
-      </div>
-    </a>
+        <div class="filters-actions">
+          <button class="btn btn-search" type="submit">Buscar vehículos</button>
+          {% if searching %}
+          <a class="btn btn-ghost" href="/">Limpiar filtros</a>
+          {% endif %}
+        </div>
+      </form>
+    </div>
   </div>
-  {% endfor %}
-</div>
-{% else %}
-<div class="empty">
-  <p>No hay publicaciones que coincidan con tu búsqueda.</p>
-  <a class="btn" href="/">Ver todas</a>
-</div>
+</section>
+{% endblock %}
+{% block content %}
+{% set searching = filters.q or filters.brand or filters.price_min or filters.price_max or filters.year_min or filters.year_max or filters.city %}
+
+{% if not searching %}
+<section class="trust">
+  <article>
+    <span class="trust-ico" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+    </span>
+    <div>
+      <h3>Directo y sin intermediarios</h3>
+      <p>Trato directo entre comprador y vendedor.</p>
+    </div>
+  </article>
+  <article>
+    <span class="trust-ico" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><path d="M7 11V8a5 5 0 0 1 10 0v3M6 11h12v10H6z"/></svg>
+    </span>
+    <div>
+      <h3>Publica con confianza</h3>
+      <p>Consejos y herramientas para que compres con calma.</p>
+    </div>
+  </article>
+  <article>
+    <span class="trust-ico" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+    </span>
+    <div>
+      <h3>Ahorra tiempo</h3>
+      <p>Encuentra el carro que buscas más rápido.</p>
+    </div>
+  </article>
+  <article>
+    <span class="trust-ico" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>
+    </span>
+    <div>
+      <h3>Soporte real</h3>
+      <p>Estamos para ayudarte en todo el proceso.</p>
+    </div>
+  </article>
+</section>
+{% endif %}
+
+<section class="listings" id="publicaciones">
+  <div class="section-head">
+    <h2>{% if searching %}Resultados{% else %}Publicaciones destacadas{% endif %}</h2>
+  </div>
+
+  {% if listings %}
+  <div class="grid">
+    {% for l in listings %}
+    <article class="card">
+      <a class="card-link" href="/listing/{{ l.id }}">
+        <div class="card-photo-wrap">
+          {% if l.status == 'sold' %}<span class="badge-sold">VENDIDO</span>{% endif %}
+          {% if not searching and loop.index <= 2 %}<span class="badge-feat">Publicación destacada</span>{% endif %}
+          {% if l.photo %}
+          <img class="card-photo" src="{{ l.photo }}" alt="{{ l.title }}" />
+          {% else %}
+          <div class="card-photo card-photo-empty">Sin foto</div>
+          {% endif %}
+        </div>
+        <div class="card-body">
+          <h3 class="card-title">{{ l.title }}</h3>
+          <div class="card-price">${{ "{:,}".format(l.price).replace(",", ".") }}</div>
+          <div class="card-meta">
+            <span>{{ l.year }}</span>
+            {% if l.transmission %}<span>{{ l.transmission }}</span>{% endif %}
+            {% if l.fuel_type %}<span>{{ l.fuel_type }}</span>{% endif %}
+          </div>
+          <div class="card-loc">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>
+            {{ l.city }}{% if l.state %}, {{ l.state }}{% endif %}
+          </div>
+        </div>
+      </a>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">
+    <p>No hay publicaciones que coincidan con tu búsqueda.</p>
+    <a class="btn" href="/">Ver todas</a>
+  </div>
+  {% endif %}
+</section>
+
+{% if not searching %}
+<section class="sell-banner">
+  <div class="sell-banner-inner">
+    <div>
+      <h2>¿Tienes un carro para vender?</h2>
+      <p>Publica gratis y llega a compradores interesados.</p>
+    </div>
+    <a class="btn btn-cta" href="/publicar">Vender mi carro</a>
+  </div>
+</section>
+
+<section class="how" id="como-funciona">
+  <h2>¿Cómo funciona?</h2>
+  <div class="how-grid">
+    <article>
+      <span class="how-n">1</span>
+      <h3>Publica o busca</h3>
+      <p>Sube fotos de tu carro o filtra por marca, precio, año y ciudad.</p>
+    </article>
+    <article>
+      <span class="how-n">2</span>
+      <h3>Habla directo</h3>
+      <p>Contacta al vendedor por WhatsApp o mensaje. Sin comisiones de por medio.</p>
+    </article>
+    <article>
+      <span class="how-n">3</span>
+      <h3>Cierra el trato</h3>
+      <p>Se ven, revisan el carro y cierran entre ustedes. MotorCriollo no cobra la venta.</p>
+    </article>
+  </div>
+</section>
 {% endif %}
 {% endblock %}

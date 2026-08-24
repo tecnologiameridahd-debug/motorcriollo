@@ -23,7 +23,7 @@
   </div>
 
   <div class="detail-side">
-    <div class="detail-price">${{ "{:,}".format(listing.price) }}</div>
+    <div class="detail-price">${{ "{:,}".format(listing.price).replace(",", ".") }}</div>
     <div class="detail-title">{{ listing.brand }} {{ listing.model }} {{ listing.year }}</div>
     {% if listing.status == 'sold' %}<span class="status-pill status-sold">VENDIDO</span>{% endif %}
 
