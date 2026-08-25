@@ -404,6 +404,21 @@ main {
 .kyc-status { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
 
 .admin-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.share-row { margin: 16px 0 4px; }
+.share-label { font-size: 13px; font-weight: 700; margin: 0 0 8px; color: var(--ink); }
+.share-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.share-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 8px 12px; border-radius: 999px; font-size: 13px; font-weight: 700;
+  border: none; cursor: pointer; text-decoration: none !important; font-family: inherit;
+}
+.share-btn.wa { background: #25D366; color: #fff !important; }
+.share-btn.fb { background: #1877F2; color: #fff !important; }
+.share-btn.x { background: #111; color: #fff !important; }
+.share-btn.sms { background: #0ea5e9; color: #fff !important; }
+.share-btn.more { background: #4b5563; color: #fff !important; }
+.share-btn.copy { background: #fff; color: #111 !important; border: 1px solid var(--line); }
+
 .report-box { margin-top: 18px; color: var(--muted); font-size: 14px; }
 .report-box summary { cursor: pointer; }
 

@@ -1,5 +1,14 @@
 {% extends "base.html" %}
 {% block title %}{{ listing.title }} — MotorCriollo{% endblock %}
+{% block extra_head %}
+{% if share %}
+<meta property="og:title" content="{{ listing.title }}" />
+<meta property="og:description" content="{{ listing.brand }} {{ listing.model }} {{ listing.year }} en MotorCriollo" />
+<meta property="og:url" content="{{ share.url }}" />
+{% if share.image %}<meta property="og:image" content="{{ share.image }}" />{% endif %}
+<meta name="twitter:card" content="summary_large_image" />
+{% endif %}
+{% endblock %}
 {% block content %}
 <div class="detail">
   <div>
@@ -71,6 +80,20 @@
       {% endif %}
     </div>
 
+    {% if share %}
+    <div class="share-row">
+      <p class="share-label">Compartir esta venta</p>
+      <div class="share-btns">
+        <a class="share-btn wa" href="{{ share.wa }}" target="_blank" rel="noopener">WhatsApp</a>
+        <a class="share-btn fb" href="{{ share.fb }}" target="_blank" rel="noopener">Facebook</a>
+        <a class="share-btn x" href="{{ share.x }}" target="_blank" rel="noopener">X</a>
+        <a class="share-btn sms" href="{{ share.sms }}">Mensajes</a>
+        <button class="share-btn more" type="button" id="shareNative" data-url="{{ share.url }}" data-text="{{ share.text }}">Más</button>
+        <button class="share-btn copy" type="button" id="shareCopy" data-url="{{ share.url }}">Copiar link</button>
+      </div>
+    </div>
+    {% endif %}
+
     {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
     {% if listing.status == 'sold' %}
       <p class="muted">Este carro ya se vendió.</p>
@@ -109,4 +132,33 @@
     {% endif %}
   </div>
 </div>
+<script>
+(function () {
+  var nativeBtn = document.getElementById("shareNative");
+  var copyBtn = document.getElementById("shareCopy");
+  if (nativeBtn && navigator.share) {
+    nativeBtn.addEventListener("click", function () {
+      navigator.share({
+        title: nativeBtn.getAttribute("data-text"),
+        text: nativeBtn.getAttribute("data-text"),
+        url: nativeBtn.getAttribute("data-url")
+      }).catch(function () {});
+    });
+  } else if (nativeBtn) {
+    nativeBtn.style.display = "none";
+  }
+  if (copyBtn) {
+    copyBtn.addEventListener("click", function () {
+      var url = copyBtn.getAttribute("data-url") || "";
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(function () {
+          copyBtn.textContent = "Copiado";
+        });
+      } else {
+        window.prompt("Copia el enlace", url);
+      }
+    });
+  }
+})();
+</script>
 {% endblock %}

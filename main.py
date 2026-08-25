@@ -5,6 +5,7 @@ import os
 import secrets
 import threading
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
@@ -311,12 +312,34 @@ def home(
 
 
 @app.get("/listing/{listing_id}", response_class=HTMLResponse)
+def _share(request: Request, listing: dict) -> dict:
+    url = f"{_base(request)}/listing/{listing['id']}"
+    price = "{:,}".format(int(listing.get("price") or 0)).replace(",", ".")
+    text = f"{listing.get('title') or 'Carro'} ${price} en MotorCriollo"
+    full = f"{text} {url}"
+    photo = listing.get("photo") or ""
+    if photo.startswith("/"):
+        photo = _base(request) + photo
+    return {
+        "url": url,
+        "text": text,
+        "image": photo,
+        "wa": "https://wa.me/?text=" + quote(full),
+        "fb": "https://www.facebook.com/sharer/sharer.php?u=" + quote(url),
+        "x": "https://twitter.com/intent/tweet?text=" + quote(text) + "&url=" + quote(url),
+        "sms": "sms:?&body=" + quote(full),
+    }
+
+
 def listing_detail(request: Request, listing_id: int):
     listing = get_listing(listing_id)
     if not listing:
         return RedirectResponse("/", status_code=302)
     seller = get_user(listing["user_id"])
-    return _page(request, "listing.html", listing=listing, seller=seller, reported=False)
+    return _page(
+        request, "listing.html", listing=listing, seller=seller, reported=False,
+        share=_share(request, listing),
+    )
 
 
 @app.post("/listing/{listing_id}/reportar")
@@ -338,7 +361,8 @@ def reportar_listing(
     )
     seller = get_user(listing["user_id"])
     return _page(
-        request, "listing.html", listing=listing, seller=seller, reported=True
+        request, "listing.html", listing=listing, seller=seller, reported=True,
+        share=_share(request, listing),
     )
 
 
