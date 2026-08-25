@@ -404,20 +404,27 @@ main {
 .kyc-status { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
 
 .admin-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.share-row { margin: 16px 0 4px; }
-.share-label { font-size: 13px; font-weight: 700; margin: 0 0 8px; color: var(--ink); }
-.share-btns { display: flex; flex-wrap: wrap; gap: 8px; }
-.share-btn {
+.btn-wa { background: #25D366 !important; color: #fff !important; }
+.btn-wa:hover { background: #1ebe5a !important; }
+
+.share-row { margin: 18px 0 6px; }
+.share-label { font-size: 12px; font-weight: 700; margin: 0 0 10px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+.share-btns { display: flex; flex-wrap: wrap; gap: 10px; }
+.share-ico {
+  width: 44px; height: 44px; border-radius: 14px;
   display: inline-flex; align-items: center; justify-content: center;
-  padding: 8px 12px; border-radius: 999px; font-size: 13px; font-weight: 700;
-  border: none; cursor: pointer; text-decoration: none !important; font-family: inherit;
+  border: none; cursor: pointer; color: #fff !important;
+  text-decoration: none !important; box-shadow: 0 4px 12px rgba(0,0,0,.12);
+  transition: transform .12s ease, box-shadow .12s ease;
 }
-.share-btn.wa { background: #25D366; color: #fff !important; }
-.share-btn.fb { background: #1877F2; color: #fff !important; }
-.share-btn.x { background: #111; color: #fff !important; }
-.share-btn.sms { background: #0ea5e9; color: #fff !important; }
-.share-btn.more { background: #4b5563; color: #fff !important; }
-.share-btn.copy { background: #fff; color: #111 !important; border: 1px solid var(--line); }
+.share-ico svg { width: 20px; height: 20px; display: block; }
+.share-ico:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(0,0,0,.16); }
+.share-ico.wa { background: #25D366; }
+.share-ico.fb { background: #1877F2; }
+.share-ico.x { background: #111; }
+.share-ico.sms { background: #2563eb; }
+.share-ico.more { background: #6b7280; }
+.share-ico.copy { background: #fff; color: #111 !important; border: 1px solid var(--line); box-shadow: none; }
 
 .report-box { margin-top: 18px; color: var(--muted); font-size: 14px; }
 .report-box summary { cursor: pointer; }
