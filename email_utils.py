@@ -227,6 +227,71 @@ def send_buyer_message(
     )
 
 
+def send_chat_notice(
+    to_email: str,
+    name: str,
+    listing_title: str,
+    preview: str,
+    conversation_id: int,
+) -> bool:
+    url = f"{SITE}/c/{conversation_id}"
+    return _send(
+        to_email,
+        f"Nuevo mensaje: {listing_title}",
+        f"Hola {name}. Tienes un mensaje sobre «{listing_title}»: {preview}\n\nResponder: {url}",
+        _html(
+            "Tienes un mensaje",
+            [
+                f"Hola {name}. Alguien te escribió sobre <b>{listing_title}</b>.",
+                (preview or "")[:280],
+            ],
+            "Abrir chat",
+            url,
+        ),
+    )
+
+
+def send_kyc_decision(
+    to_email: str,
+    name: str,
+    *,
+    approved: bool,
+    seller_code: str = "",
+    note: str = "",
+) -> bool:
+    if approved:
+        extra = f" Tu ID de vendedor es {seller_code}." if seller_code else ""
+        return _send(
+            to_email,
+            "Tu verificación fue aprobada — MotorCriollo",
+            f"Hola {name}. Administración aprobó tu cédula.{extra} Ya puedes publicar.",
+            _html(
+                "Ya puedes publicar",
+                [
+                    f"Hola {name}. Administración aprobó tu verificación.{extra}",
+                    "Entra y publica tu carro.",
+                ],
+                "Publicar un carro",
+                f"{SITE}/publicar",
+            ),
+        )
+    motivo = f" Motivo: {note}" if note else ""
+    return _send(
+        to_email,
+        "Verificación no aprobada — MotorCriollo",
+        f"Hola {name}. No se aprobó tu verificación.{motivo} Puedes volver a enviar documentos.",
+        _html(
+            "Hay que corregir documentos",
+            [
+                f"Hola {name}. Administración no aprobó esta vez.{motivo}",
+                "Vuelve a subir cédula y comprobante de dirección, más nítidos.",
+            ],
+            "Enviar de nuevo",
+            f"{SITE}/verificacion",
+        ),
+    )
+
+
 def send_test(to_email: str) -> bool:
     return _send(
         to_email,

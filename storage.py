@@ -101,6 +101,17 @@ def init_db() -> None:
             user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             body TEXT NOT NULL,
             created_at TEXT NOT NULL)""",
+        f"""CREATE TABLE IF NOT EXISTS reports (
+            id {pk},
+            listing_id INTEGER NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+            reporter_id INTEGER DEFAULT 0,
+            reason TEXT NOT NULL,
+            detail TEXT DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'open',
+            created_at TEXT NOT NULL)""",
+        """CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL)""",
         f"""CREATE TABLE IF NOT EXISTS deals (
             id {pk},
             conversation_id INTEGER NOT NULL UNIQUE REFERENCES conversations(id) ON DELETE CASCADE,
@@ -630,9 +641,12 @@ def browse_listings(
     year_max: int | None = None,
     city: str = "",
     limit: int = 60,
+    include_demo: bool = True,
 ) -> list[dict[str, Any]]:
     where = ["status='active'"]
     params: list[Any] = []
+    if not include_demo:
+        where.append("(is_demo IS NULL OR is_demo=0)")
     if q:
         like = f"%{q.strip().lower()}%"
         where.append(
@@ -668,11 +682,21 @@ def browse_listings(
     return [_listing_row(r) for r in rows]
 
 
-def count_active_listings() -> int:
+def count_active_listings(include_demo: bool = True) -> int:
     con = connect()
-    r = execute(con, "SELECT COUNT(*) AS n FROM listings WHERE status='active'").fetchone()
+    if include_demo:
+        r = execute(con, "SELECT COUNT(*) AS n FROM listings WHERE status='active'").fetchone()
+    else:
+        r = execute(
+            con,
+            "SELECT COUNT(*) AS n FROM listings WHERE status='active' AND (is_demo IS NULL OR is_demo=0)",
+        ).fetchone()
     con.close()
     return int(getv(r, "n") or 0)
+
+
+def count_real_active() -> int:
+    return count_active_listings(include_demo=False)
 
 
 # ---------------------------------------------------------------- photos ----
@@ -1224,3 +1248,93 @@ def delete_admin_session(token: str | None) -> None:
     execute(con, "DELETE FROM admin_sessions WHERE token=?", (token,))
     con.commit()
     con.close()
+
+
+def get_setting(key: str, default: str = "") -> str:
+    try:
+        con = connect()
+        row = execute(con, "SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+        con.close()
+    except Exception:
+        return default
+    if not row:
+        return default
+    return str(getv(row, "value") or default)
+
+
+def set_setting(key: str, value: str) -> None:
+    con = connect()
+    existing = execute(con, "SELECT key FROM settings WHERE key=?", (key,)).fetchone()
+    if existing:
+        execute(con, "UPDATE settings SET value=? WHERE key=?", (str(value), key))
+    else:
+        execute(con, "INSERT INTO settings(key, value) VALUES(?,?)", (key, str(value)))
+    con.commit()
+    con.close()
+
+
+def hide_demo_now() -> bool:
+    mode = (get_setting("hide_demo") or "auto").strip().lower()
+    if mode in ("1", "on", "yes", "true"):
+        return True
+    if mode in ("0", "off", "no", "false"):
+        return False
+    return count_real_active() > 0
+
+
+def add_report(
+    listing_id: int,
+    *,
+    reason: str,
+    detail: str = "",
+    reporter_id: int = 0,
+) -> int:
+    reason = (reason or "").strip()[:40] or "otro"
+    detail = (detail or "").strip()[:500]
+    con = connect()
+    rid = insert_id(
+        con,
+        """
+        INSERT INTO reports(listing_id, reporter_id, reason, detail, status, created_at)
+        VALUES(?,?,?,?,?,?)
+        """,
+        (listing_id, int(reporter_id or 0), reason, detail, "open", _now()),
+    )
+    con.commit()
+    con.close()
+    return rid
+
+
+def list_reports(status: str = "open", limit: int = 80) -> list[dict[str, Any]]:
+    con = connect()
+    if status == "all":
+        rows = execute(
+            con, "SELECT * FROM reports ORDER BY created_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+    else:
+        rows = execute(
+            con,
+            "SELECT * FROM reports WHERE status=? ORDER BY created_at DESC LIMIT ?",
+            (status, limit),
+        ).fetchall()
+    con.close()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["listing"] = get_listing(d["listing_id"])
+        out.append(d)
+    return out
+
+
+def close_report(report_id: int) -> None:
+    con = connect()
+    execute(con, "UPDATE reports SET status='closed' WHERE id=?", (report_id,))
+    con.commit()
+    con.close()
+
+
+def count_reports_open() -> int:
+    con = connect()
+    r = execute(con, "SELECT COUNT(*) AS n FROM reports WHERE status='open'").fetchone()
+    con.close()
+    return int(getv(r, "n") or 0)

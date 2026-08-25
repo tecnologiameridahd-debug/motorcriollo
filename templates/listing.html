@@ -82,6 +82,31 @@
       <a class="btn btn-block" href="/chat/{{ listing.id }}">Hablar en la página</a>
       <p class="muted" style="margin-top:8px">El contacto es por MotorCriollo. Si cierran, el vendedor paga ${{ commission }} de comisión.</p>
     {% endif %}
+
+    {% if reported %}
+    <div class="alert alert-ok" style="margin-top:16px">Recibimos tu reporte. Administración lo revisa.</div>
+    {% elif not me or me.id != listing.user_id %}
+    <details class="report-box">
+      <summary>Reportar anuncio</summary>
+      <form method="post" action="/listing/{{ listing.id }}/reportar" class="stack" style="margin-top:10px">
+        <div class="field">
+          <label>Motivo</label>
+          <select name="reason" required>
+            <option value="estafa">Parece estafa</option>
+            <option value="fotos_falsas">Fotos falsas o de otro carro</option>
+            <option value="precio_falso">Precio irreal</option>
+            <option value="duplicado">Anuncio duplicado</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Detalle (opcional)</label>
+          <textarea name="detail" maxlength="500" placeholder="Qué viste que no cuadra"></textarea>
+        </div>
+        <button class="btn btn-ghost btn-sm" type="submit">Enviar reporte</button>
+      </form>
+    </details>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

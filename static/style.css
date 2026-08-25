@@ -404,9 +404,12 @@ main {
 .kyc-status { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
 
 .admin-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.report-box { margin-top: 18px; color: var(--muted); font-size: 14px; }
+.report-box summary { cursor: pointer; }
+
 .admin-stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 12px;
   margin: 8px 0 20px;
 }

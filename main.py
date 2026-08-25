@@ -31,7 +31,8 @@ from config import (
 from email_utils import (
     email_ready,
     email_status,
-    send_buyer_message,
+    send_chat_notice,
+    send_kyc_decision,
     send_reset,
     send_verify,
     send_welcome,
@@ -46,6 +47,7 @@ from storage import (
     accept_deal,
     add_chat_message,
     add_listing_photo,
+    add_report,
     admin_from_token,
     approve_kyc,
     browse_listings,
@@ -53,8 +55,10 @@ from storage import (
     cancel_deal,
     confirm_deal_paid,
     count_active_listings,
+    close_report,
     count_deals_open,
     count_kyc_pending,
+    count_reports_open,
     count_users,
     create_admin_session,
     create_listing,
@@ -69,7 +73,9 @@ from storage import (
     get_deal_by_conversation,
     get_listing,
     get_or_create_conversation,
+    get_setting,
     get_user,
+    hide_demo_now,
     get_user_by_email,
     init_db,
     list_all_listings,
@@ -77,6 +83,7 @@ from storage import (
     list_conversations,
     list_deals,
     list_kyc,
+    list_reports,
     list_user_listings,
     list_users_admin,
     login,
@@ -84,6 +91,7 @@ from storage import (
     reject_kyc,
     revoke_kyc,
     set_deal_proof,
+    set_setting,
     set_password,
     submit_kyc,
     take_email_token,
@@ -127,9 +135,33 @@ def _page(request: Request, name: str, **ctx):
     ctx.setdefault("transmissions", TRANSMISSIONS)
     ctx.setdefault("fuel_types", FUEL_TYPES)
     ctx.setdefault("conditions", CONDITIONS)
-    ctx.setdefault("commission", COMMISSION_USD)
-    ctx.setdefault("pay_info", PAY_INFO)
+    ctx.setdefault("commission", _commission())
+    ctx.setdefault("pay_info", _pay_info())
     return templates.TemplateResponse(request, name, ctx)
+
+
+def _commission() -> int:
+    raw = (get_setting("commission") or "").strip()
+    if raw.isdigit():
+        return max(1, int(raw))
+    return int(COMMISSION_USD)
+
+
+def _pay_info() -> str:
+    return (get_setting("pay_info") or "").strip() or PAY_INFO
+
+
+def _queue_mail(fn, *args, **kwargs) -> None:
+    if not email_ready():
+        return
+
+    def _run():
+        try:
+            fn(*args, **kwargs)
+        except Exception as e:
+            print(f"[mail] {type(e).__name__}: {e}")
+
+    threading.Thread(target=_run, name="mc-mail", daemon=True).start()
 
 
 def _base(request: Request) -> str:
@@ -262,9 +294,11 @@ def home(
         v = (v or "").strip()
         return int(v) if v.isdigit() else None
 
+    show_demo = not hide_demo_now()
     listings = browse_listings(
         q=q, brand=brand, price_min=_int(price_min), price_max=_int(price_max),
         year_min=_int(year_min), year_max=_int(year_max), city=city,
+        include_demo=show_demo,
     )
     return _page(
         request, "index.html", listings=listings,
@@ -272,7 +306,7 @@ def home(
             "q": q, "brand": brand, "price_min": price_min, "price_max": price_max,
             "year_min": year_min, "year_max": year_max, "city": city,
         },
-        total=count_active_listings(),
+        total=count_active_listings(include_demo=show_demo),
     )
 
 
@@ -282,7 +316,30 @@ def listing_detail(request: Request, listing_id: int):
     if not listing:
         return RedirectResponse("/", status_code=302)
     seller = get_user(listing["user_id"])
-    return _page(request, "listing.html", listing=listing, seller=seller)
+    return _page(request, "listing.html", listing=listing, seller=seller, reported=False)
+
+
+@app.post("/listing/{listing_id}/reportar")
+def reportar_listing(
+    request: Request,
+    listing_id: int,
+    reason: str = Form(...),
+    detail: str = Form(""),
+):
+    listing = get_listing(listing_id)
+    if not listing:
+        return RedirectResponse("/", status_code=302)
+    user = me(request)
+    add_report(
+        listing_id,
+        reason=reason,
+        detail=detail,
+        reporter_id=int(user["id"]) if user else 0,
+    )
+    seller = get_user(listing["user_id"])
+    return _page(
+        request, "listing.html", listing=listing, seller=seller, reported=True
+    )
 
 
 @app.get("/chat/{listing_id}")
@@ -334,6 +391,20 @@ def chat_send(request: Request, cid: int, body: str = Form(...)):
         add_chat_message(cid, user["id"], body)
     except ValueError:
         return RedirectResponse(f"/c/{cid}", status_code=303)
+    convo = get_conversation(cid)
+    if convo:
+        other_id = convo["seller_id"] if int(user["id"]) == int(convo["buyer_id"]) else convo["buyer_id"]
+        other = get_user(other_id)
+        listing = get_listing(convo["listing_id"])
+        if other and other.get("email") and not str(other.get("email") or "").endswith("@demo.motorcriollo"):
+            _queue_mail(
+                send_chat_notice,
+                other["email"],
+                other.get("name") or "hola",
+                (listing or {}).get("title") or "un carro",
+                (body or "")[:240],
+                cid,
+            )
     return RedirectResponse(f"/c/{cid}", status_code=303)
 
 
@@ -343,10 +414,11 @@ def chat_accept(request: Request, cid: int):
     if not user:
         return RedirectResponse("/login", status_code=302)
     try:
-        accept_deal(cid, user["id"], COMMISSION_USD)
+        fee = _commission()
+        accept_deal(cid, user["id"], fee)
         add_chat_message(
             cid, user["id"],
-            f"Acepté la venta. Debo pagar ${COMMISSION_USD} de comisión a MotorCriollo para cerrar.",
+            f"Acepté la venta. Debo pagar ${fee} de comisión a MotorCriollo para cerrar.",
         )
     except ValueError as e:
         return chat_view(request, cid, error=str(e))
@@ -839,12 +911,19 @@ def admin_home(request: Request, tab: str = "kyc"):
             "users": count_users(),
             "kyc_pending": count_kyc_pending(),
             "deals_open": count_deals_open(),
+            "reports_open": count_reports_open(),
         },
         pending=pending,
         reviewed=[u for u in reviewed if u.get("kyc_status") != "pending"],
         users=list_users_admin(),
         listings=list_all_listings(),
         deals=list_deals(),
+        reports=list_reports("open"),
+        settings={
+            "commission": str(_commission()),
+            "pay_info": _pay_info(),
+            "hide_demo": get_setting("hide_demo") or "auto",
+        },
     )
 
 
@@ -872,7 +951,16 @@ def admin_kyc_approve(request: Request, user_id: int, note: str = Form("")):
     gate = _require_admin(request)
     if gate:
         return gate
-    approve_kyc(user_id, note=note)
+    user = approve_kyc(user_id, note=note)
+    if user and user.get("email") and not str(user.get("email") or "").endswith("@demo.motorcriollo"):
+        _queue_mail(
+            send_kyc_decision,
+            user["email"],
+            user.get("name") or "hola",
+            approved=True,
+            seller_code=user.get("seller_code") or "",
+            note=note,
+        )
     return RedirectResponse("/admin?tab=kyc", status_code=303)
 
 
@@ -881,7 +969,15 @@ def admin_kyc_reject(request: Request, user_id: int, note: str = Form("")):
     gate = _require_admin(request)
     if gate:
         return gate
-    reject_kyc(user_id, note=note or "Documentos no válidos")
+    user = reject_kyc(user_id, note=note or "Documentos no válidos")
+    if user and user.get("email") and not str(user.get("email") or "").endswith("@demo.motorcriollo"):
+        _queue_mail(
+            send_kyc_decision,
+            user["email"],
+            user.get("name") or "hola",
+            approved=False,
+            note=note or "Documentos no válidos",
+        )
     return RedirectResponse("/admin?tab=kyc", status_code=303)
 
 
@@ -892,6 +988,34 @@ def admin_kyc_revoke(request: Request, user_id: int, note: str = Form("")):
         return gate
     revoke_kyc(user_id, note=note)
     return RedirectResponse("/admin?tab=users", status_code=303)
+
+
+@app.post("/admin/ajustes")
+def admin_settings_save(
+    request: Request,
+    commission: str = Form("20"),
+    pay_info: str = Form(""),
+    hide_demo: str = Form("auto"),
+):
+    gate = _require_admin(request)
+    if gate:
+        return gate
+    digits = "".join(c for c in commission if c.isdigit())
+    set_setting("commission", digits or "20")
+    set_setting("pay_info", (pay_info or "").strip()[:800])
+    if hide_demo not in ("auto", "1", "0"):
+        hide_demo = "auto"
+    set_setting("hide_demo", hide_demo)
+    return RedirectResponse("/admin?tab=ajustes", status_code=303)
+
+
+@app.post("/admin/reporte/{report_id}/cerrar")
+def admin_report_close(request: Request, report_id: int):
+    gate = _require_admin(request)
+    if gate:
+        return gate
+    close_report(report_id)
+    return RedirectResponse("/admin?tab=reportes", status_code=303)
 
 
 @app.post("/admin/deal/{deal_id}/pagado")

@@ -12,6 +12,7 @@
     <div><strong>{{ stats.users }}</strong><span>usuarios</span></div>
     <div><strong>{{ stats.listings }}</strong><span>carros activos</span></div>
     <div><strong>{{ stats.deals_open or 0 }}</strong><span>pagos pendientes</span></div>
+    <div><strong>{{ stats.reports_open or 0 }}</strong><span>reportes</span></div>
   </div>
 
   <nav class="admin-tabs">
@@ -19,6 +20,8 @@
     <a class="{% if tab == 'users' %}is-on{% endif %}" href="/admin?tab=users">Usuarios</a>
     <a class="{% if tab == 'listings' %}is-on{% endif %}" href="/admin?tab=listings">Publicaciones</a>
     <a class="{% if tab == 'pagos' %}is-on{% endif %}" href="/admin?tab=pagos">Pagos / ventas</a>
+    <a class="{% if tab == 'reportes' %}is-on{% endif %}" href="/admin?tab=reportes">Reportes</a>
+    <a class="{% if tab == 'ajustes' %}is-on{% endif %}" href="/admin?tab=ajustes">Ajustes</a>
   </nav>
 
   {% if tab == 'kyc' %}
@@ -102,6 +105,59 @@
         {% endfor %}
       </tbody>
     </table>
+  {% endif %}
+
+  {% if tab == 'ajustes' %}
+    <h2>Ajustes de la plataforma</h2>
+    <form class="stack wide" method="post" action="/admin/ajustes">
+      <div class="field">
+        <label>Comisión del vendedor (USD)</label>
+        <input type="number" name="commission" min="1" max="500" value="{{ settings.commission }}" />
+      </div>
+      <div class="field">
+        <label>Cómo pagar (Zelle, Pago Móvil, cuenta…)</label>
+        <textarea name="pay_info" rows="5" maxlength="800">{{ settings.pay_info }}</textarea>
+      </div>
+      <div class="field">
+        <label>Carros de demostración</label>
+        <select name="hide_demo">
+          <option value="auto" {% if settings.hide_demo == 'auto' %}selected{% endif %}>Ocultar solo cuando haya vendedores reales</option>
+          <option value="1" {% if settings.hide_demo == '1' %}selected{% endif %}>Ocultar ahora</option>
+          <option value="0" {% if settings.hide_demo == '0' %}selected{% endif %}>Mostrar siempre</option>
+        </select>
+      </div>
+      <button class="btn" type="submit">Guardar ajustes</button>
+    </form>
+  {% endif %}
+
+  {% if tab == 'reportes' %}
+    <h2>Reportes abiertos</h2>
+    {% if reports %}
+    <table class="mylist">
+      <thead><tr><th>Anuncio</th><th>Motivo</th><th>Detalle</th><th></th></tr></thead>
+      <tbody>
+        {% for r in reports %}
+        <tr>
+          <td>{% if r.listing %}<a href="/listing/{{ r.listing.id }}">{{ r.listing.title }}</a>{% else %}#{{ r.listing_id }}{% endif %}</td>
+          <td>{{ r.reason }}</td>
+          <td>{{ r.detail }}</td>
+          <td class="row-actions">
+            <form method="post" action="/admin/reporte/{{ r.id }}/cerrar">
+              <button class="btn btn-ghost btn-sm" type="submit">Cerrar</button>
+            </form>
+            {% if r.listing %}
+            <form method="post" action="/admin/listing/{{ r.listing.id }}/eliminar" onsubmit="return confirm('¿Eliminar el anuncio?')">
+              <button class="btn btn-danger btn-sm" type="submit">Eliminar anuncio</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No hay reportes abiertos.</p>
+    {% endif %}
   {% endif %}
 
   {% if tab == 'pagos' %}
