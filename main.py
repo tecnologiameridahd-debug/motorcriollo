@@ -312,7 +312,12 @@ def home(
 
 
 def _share(request: Request, listing: dict) -> dict:
-    url = f"{_base(request)}/listing/{listing['id']}"
+    origin = str(request.base_url).rstrip("/")
+    if "onrender.com" in origin and PUBLIC_BASE_URL:
+        origin = PUBLIC_BASE_URL.rstrip("/")
+    if origin.startswith("https://www.motorcriollo.store"):
+        origin = "https://motorcriollo.store"
+    url = f"{origin}/listing/{listing['id']}"
     price = "{:,}".format(int(listing.get("price") or 0)).replace(",", ".")
     text = f"{listing.get('title') or 'Carro'} ${price} en MotorCriollo"
     full = f"{text} {url}"
@@ -334,7 +339,7 @@ def _share(request: Request, listing: dict) -> dict:
 def listing_detail(request: Request, listing_id: int):
     listing = get_listing(listing_id)
     if not listing:
-        return RedirectResponse("/", status_code=302)
+        return _page(request, "listing_missing.html", listing_id=listing_id)
     seller = get_user(listing["user_id"])
     return _page(
         request, "listing.html", listing=listing, seller=seller, reported=False,

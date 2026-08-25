@@ -643,7 +643,7 @@ def browse_listings(
     limit: int = 60,
     include_demo: bool = True,
 ) -> list[dict[str, Any]]:
-    where = ["status='active'"]
+    where = ["status IN ('active','reserved')"]
     params: list[Any] = []
     if not include_demo:
         where.append("(is_demo IS NULL OR is_demo=0)")

@@ -59,6 +59,7 @@
   </div>
 
   <div class="detail-side">
+    <a class="muted" href="/#publicaciones">← Todas las publicaciones</a>
     <div class="detail-price">${{ "{:,}".format(listing.price).replace(",", ".") }}</div>
     <div class="detail-title">{{ listing.brand }} {{ listing.model }} {{ listing.year }}</div>
     {% if listing.status == 'sold' %}<span class="status-pill status-sold">VENDIDO</span>{% endif %}
