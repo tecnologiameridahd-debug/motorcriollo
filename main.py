@@ -311,7 +311,6 @@ def home(
     )
 
 
-@app.get("/listing/{listing_id}", response_class=HTMLResponse)
 def _share(request: Request, listing: dict) -> dict:
     url = f"{_base(request)}/listing/{listing['id']}"
     price = "{:,}".format(int(listing.get("price") or 0)).replace(",", ".")
@@ -331,6 +330,7 @@ def _share(request: Request, listing: dict) -> dict:
     }
 
 
+@app.get("/listing/{listing_id}", response_class=HTMLResponse)
 def listing_detail(request: Request, listing_id: int):
     listing = get_listing(listing_id)
     if not listing:
