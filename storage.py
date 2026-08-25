@@ -1274,12 +1274,8 @@ def set_setting(key: str, value: str) -> None:
 
 
 def hide_demo_now() -> bool:
-    mode = (get_setting("hide_demo") or "auto").strip().lower()
-    if mode in ("1", "on", "yes", "true"):
-        return True
-    if mode in ("0", "off", "no", "false"):
-        return False
-    return count_real_active() > 0
+    mode = (get_setting("hide_demo") or "0").strip().lower()
+    return mode in ("1", "on", "yes", "true")
 
 
 def add_report(

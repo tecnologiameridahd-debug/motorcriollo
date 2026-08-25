@@ -121,9 +121,8 @@
       <div class="field">
         <label>Carros de demostración</label>
         <select name="hide_demo">
-          <option value="auto" {% if settings.hide_demo == 'auto' %}selected{% endif %}>Ocultar solo cuando haya vendedores reales</option>
-          <option value="1" {% if settings.hide_demo == '1' %}selected{% endif %}>Ocultar ahora</option>
-          <option value="0" {% if settings.hide_demo == '0' %}selected{% endif %}>Mostrar siempre</option>
+          <option value="0" {% if settings.hide_demo != '1' %}selected{% endif %}>Mostrar carros demo</option>
+          <option value="1" {% if settings.hide_demo == '1' %}selected{% endif %}>Ocultar carros demo</option>
         </select>
       </div>
       <button class="btn" type="submit">Guardar ajustes</button>

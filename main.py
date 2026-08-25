@@ -922,7 +922,7 @@ def admin_home(request: Request, tab: str = "kyc"):
         settings={
             "commission": str(_commission()),
             "pay_info": _pay_info(),
-            "hide_demo": get_setting("hide_demo") or "auto",
+            "hide_demo": get_setting("hide_demo") or "0",
         },
     )
 
@@ -1003,8 +1003,8 @@ def admin_settings_save(
     digits = "".join(c for c in commission if c.isdigit())
     set_setting("commission", digits or "20")
     set_setting("pay_info", (pay_info or "").strip()[:800])
-    if hide_demo not in ("auto", "1", "0"):
-        hide_demo = "auto"
+    if hide_demo not in ("1", "0"):
+        hide_demo = "0"
     set_setting("hide_demo", hide_demo)
     return RedirectResponse("/admin?tab=ajustes", status_code=303)
 
