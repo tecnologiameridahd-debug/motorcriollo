@@ -48,6 +48,7 @@ from storage import (
     accept_deal,
     add_chat_message,
     add_listing_photo,
+    add_rating,
     add_report,
     admin_from_token,
     approve_kyc,
@@ -78,6 +79,7 @@ from storage import (
     get_user,
     hide_demo_now,
     get_user_by_email,
+    has_rated_deal,
     init_db,
     list_all_listings,
     list_chat_messages,
@@ -93,6 +95,7 @@ from storage import (
     revoke_kyc,
     set_deal_proof,
     set_setting,
+    seller_reputation,
     set_password,
     submit_kyc,
     take_email_token,
@@ -163,6 +166,13 @@ def _queue_mail(fn, *args, **kwargs) -> None:
             print(f"[mail] {type(e).__name__}: {e}")
 
     threading.Thread(target=_run, name="mc-mail", daemon=True).start()
+
+
+def _safe_next(nxt: str) -> str:
+    nxt = (nxt or "").strip()
+    if nxt.startswith("/") and not nxt.startswith("//"):
+        return nxt
+    return "/"
 
 
 def _base(request: Request) -> str:
@@ -341,9 +351,10 @@ def listing_detail(request: Request, listing_id: int):
     if not listing:
         return _page(request, "listing_missing.html", listing_id=listing_id)
     seller = get_user(listing["user_id"])
+    rep = seller_reputation(listing["user_id"]) if listing.get("user_id") else {}
     return _page(
         request, "listing.html", listing=listing, seller=seller, reported=False,
-        share=_share(request, listing),
+        share=_share(request, listing), reputation=rep,
     )
 
 
@@ -368,6 +379,7 @@ def reportar_listing(
     return _page(
         request, "listing.html", listing=listing, seller=seller, reported=True,
         share=_share(request, listing),
+        reputation=seller_reputation(listing["user_id"]) if listing.get("user_id") else {},
     )
 
 
@@ -378,7 +390,7 @@ def chat_start(request: Request, listing_id: int):
         return RedirectResponse(f"/login?next=/chat/{listing_id}", status_code=302)
     listing = get_listing(listing_id)
     if not listing:
-        return RedirectResponse("/", status_code=302)
+        return _page(request, "listing_missing.html", listing_id=listing_id)
     if int(user["id"]) == int(listing["user_id"]):
         return RedirectResponse("/mensajes", status_code=302)
     try:
@@ -398,6 +410,7 @@ def chat_view(request: Request, cid: int, error: str = ""):
         return RedirectResponse("/mensajes", status_code=302)
     listing = get_listing(convo["listing_id"])
     other_id = convo["seller_id"] if int(user["id"]) == int(convo["buyer_id"]) else convo["buyer_id"]
+    deal = get_deal_by_conversation(cid)
     return _page(
         request,
         "chat.html",
@@ -405,8 +418,14 @@ def chat_view(request: Request, cid: int, error: str = ""):
         listing=listing,
         other=get_user(other_id),
         messages=list_chat_messages(cid),
-        deal=get_deal_by_conversation(cid),
+        deal=deal,
         i_am_seller=int(user["id"]) == int(convo["seller_id"]),
+        can_rate=bool(
+            deal
+            and deal.get("status") == "paid"
+            and int(user["id"]) == int(convo["buyer_id"])
+            and not has_rated_deal(deal["id"])
+        ),
         error=error,
     )
 
@@ -469,6 +488,46 @@ async def chat_proof(request: Request, cid: int, proof: UploadFile = File(None))
     set_deal_proof(deal["id"], path)
     add_chat_message(cid, user["id"], "Subí el comprobante de la comisión. Administración lo revisa.")
     return RedirectResponse(f"/c/{cid}", status_code=303)
+
+
+@app.post("/c/{cid}/calificar")
+def chat_rate(request: Request, cid: int, stars: int = Form(...), comment: str = Form("")):
+    user = me(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    convo = get_conversation(cid)
+    deal = get_deal_by_conversation(cid)
+    if not convo or not deal or deal.get("status") != "paid":
+        return RedirectResponse(f"/c/{cid}", status_code=302)
+    if int(user["id"]) != int(deal["buyer_id"]):
+        return RedirectResponse(f"/c/{cid}", status_code=302)
+    try:
+        add_rating(
+            seller_id=deal["seller_id"],
+            buyer_id=user["id"],
+            stars=stars,
+            comment=comment,
+            deal_id=deal["id"],
+            listing_id=deal["listing_id"],
+        )
+        add_chat_message(cid, user["id"], f"Califiqué al vendedor: {int(stars)}/5.")
+    except ValueError as e:
+        return chat_view(request, cid, error=str(e))
+    return RedirectResponse(f"/c/{cid}", status_code=303)
+
+
+@app.get("/vendedor/{user_id}", response_class=HTMLResponse)
+def seller_profile(request: Request, user_id: int):
+    seller = get_user(user_id)
+    if not seller:
+        return RedirectResponse("/#publicaciones", status_code=302)
+    return _page(
+        request,
+        "vendedor.html",
+        seller=seller,
+        reputation=seller_reputation(user_id),
+        listings=list_user_listings(user_id),
+    )
 
 
 # ----------------------------------------------------------- publicar ----
@@ -679,10 +738,10 @@ def mensajes(request: Request):
 # --------------------------------------------------------------- auth ----
 
 @app.get("/registro", response_class=HTMLResponse)
-def registro_get(request: Request):
+def registro_get(request: Request, next: str = ""):
     if me(request):
-        return RedirectResponse("/", status_code=302)
-    return _page(request, "registro.html")
+        return RedirectResponse(_safe_next(next), status_code=302)
+    return _page(request, "registro.html", next=next)
 
 
 @app.post("/registro")
@@ -694,6 +753,7 @@ def registro_post(
     phone: str = Form(""),
     city: str = Form(""),
     state: str = Form(""),
+    next: str = Form(""),
 ):
     try:
         user = create_user(
@@ -702,16 +762,16 @@ def registro_post(
         _queue_verify_email(user)
         _queue_welcome_email(user)
     except ValueError as e:
-        return _page(request, "registro.html", error=str(e))
+        return _page(request, "registro.html", error=str(e), next=next)
     token = create_session(user["id"], SESSION_DAYS)
-    resp = RedirectResponse("/", status_code=303)
+    resp = RedirectResponse(_safe_next(next), status_code=303)
     return _set_session(resp, token)
 
 
 @app.get("/login", response_class=HTMLResponse)
 def login_get(request: Request, next: str = ""):
     if me(request):
-        return RedirectResponse("/", status_code=302)
+        return RedirectResponse(_safe_next(next), status_code=302)
     return _page(request, "login.html", next=next)
 
 
@@ -721,7 +781,7 @@ def login_post(request: Request, email: str = Form(...), password: str = Form(..
     if not user:
         return _page(request, "login.html", error="Email o contraseña incorrectos", next=next)
     token = create_session(user["id"], SESSION_DAYS)
-    resp = RedirectResponse(next or "/", status_code=303)
+    resp = RedirectResponse(_safe_next(next), status_code=303)
     return _set_session(resp, token)
 
 

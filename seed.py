@@ -6,6 +6,7 @@ import os
 from config import DEMO_DIR
 from storage import (
     add_listing_photo,
+    add_rating,
     approve_kyc,
     browse_listings,
     create_listing,
@@ -17,6 +18,7 @@ from storage import (
     get_user_by_email,
     init_db,
     list_user_listings,
+    seller_reputation,
     update_listing,
 )
 
@@ -658,7 +660,33 @@ def seed() -> int:
         have.add(item["title"])
 
     _apply_real_photos()
+    _seed_reputation(users_by_email)
     return created
+
+
+def _seed_reputation(users_by_email: dict) -> None:
+    comments = [
+        (5, "Trato serio, el carro como en las fotos."),
+        (5, "Todo claro, papeles en regla."),
+        (4, "Buena comunicación."),
+        (5, "Recomendado. Vendedor verificado."),
+        (4, "Negociación honesta."),
+        (5, "Puntual y sin sorpresas."),
+    ]
+    ids = list(users_by_email.values())
+    if len(ids) < 2:
+        return
+    for i, uid in enumerate(ids):
+        if seller_reputation(uid)["count"] >= 3:
+            continue
+        for j, (stars, text) in enumerate(comments[: 4 + (i % 3)]):
+            buyer = ids[(i + j + 1) % len(ids)]
+            if buyer == uid:
+                continue
+            try:
+                add_rating(seller_id=uid, buyer_id=buyer, stars=stars, comment=text)
+            except ValueError:
+                pass
 
 
 if __name__ == "__main__":

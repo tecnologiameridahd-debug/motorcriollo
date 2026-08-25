@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}{{ seller.name }} · vendedor — MotorCriollo{% endblock %}
+{% block content %}
+<div class="seller-profile">
+  <div class="seller-card seller-card-lg">
+    <div class="seller-avatar">{{ (seller.name or "V")[0]|upper }}</div>
+    <div class="seller-meta">
+      <h1 class="seller-name">{{ seller.name }}</h1>
+      <div class="seller-role">Vendedor{% if seller.seller_code %} · {{ seller.seller_code }}{% endif %}
+        {% if seller.city %} · {{ seller.city }}{% endif %}</div>
+      {% if seller.kyc_status == 'approved' %}
+      <div class="verified-line">Cuenta verificada por administración</div>
+      {% endif %}
+      {% if reputation and reputation.count %}
+      <div class="stars">★ {{ reputation.avg }} de 5 · {{ reputation.count }} opiniones · {{ reputation.sales }} ventas cerradas</div>
+      {% else %}
+      <p class="muted">Este vendedor aún no tiene opiniones.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if reputation and reputation.comments %}
+  <h2>Opiniones</h2>
+  <div class="reviews">
+    {% for c in reputation.comments %}
+    <article class="review">
+      <div class="stars">★ {{ c.stars }}/5</div>
+      <p>{{ c.comment }}</p>
+    </article>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <h2>Publicaciones</h2>
+  {% if listings %}
+  <div class="grid">
+    {% for l in listings %}
+    {% if l.status in ('active','reserved') %}
+    <article class="card">
+      <a class="card-link" href="/listing/{{ l.id }}">
+        <div class="card-photo-wrap">
+          {% if l.photo %}
+          <img class="card-photo" src="{{ l.photo }}" alt="{{ l.title }}" />
+          {% else %}
+          <div class="card-photo card-photo-empty">Sin foto</div>
+          {% endif %}
+        </div>
+        <div class="card-body">
+          <h3 class="card-title">{{ l.title }}</h3>
+          <div class="card-price">${{ "{:,}".format(l.price).replace(",", ".") }}</div>
+        </div>
+      </a>
+    </article>
+    {% endif %}
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">No tiene carros publicados ahora.</p>
+  {% endif %}
+</div>
+{% endblock %}

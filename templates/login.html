@@ -29,6 +29,6 @@
   <p style="margin-top:14px;font-size:14px">
     <a href="/olvide">¿Olvidaste tu contraseña?</a>
   </p>
-  <p style="font-size:14px">¿No tienes cuenta? <a href="/registro">Crea una</a></p>
+  <p style="font-size:14px">¿No tienes cuenta? <a href="/registro{% if next %}?next={{ next }}{% endif %}">Crea una</a></p>
 </div>
 {% endblock %}

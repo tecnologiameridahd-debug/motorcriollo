@@ -74,20 +74,35 @@
       <li><span>Ubicación</span><span>{{ listing.city }}{% if listing.state %}, {{ listing.state }}{% endif %}</span></li>
     </ul>
 
-    <div class="seller-box">
-      <div class="seller-name">{{ seller.name if seller else "Vendedor" }}</div>
-      {% if listing.seller_verified %}
-      <p class="verified-line">Nivel {{ listing.verify_level }} · {{ listing.seller_code }}</p>
-      {% endif %}
-    </div>
+    {% if seller %}
+    <a class="seller-card" href="/vendedor/{{ seller.id }}">
+      <div class="seller-avatar">{{ (seller.name or "V")[0]|upper }}</div>
+      <div class="seller-meta">
+        <div class="seller-name">{{ seller.name }}</div>
+        <div class="seller-role">Vendedor{% if listing.seller_code %} · {{ listing.seller_code }}{% endif %}</div>
+        {% if listing.seller_verified %}<div class="verified-line">Cuenta verificada · Nivel {{ listing.verify_level }}</div>{% endif %}
+        {% if reputation and reputation.count %}
+        <div class="stars">★ {{ reputation.avg }} · {{ reputation.count }} opiniones · {{ reputation.sales }} ventas</div>
+        {% else %}
+        <div class="muted">Sin opiniones aún</div>
+        {% endif %}
+      </div>
+    </a>
+    {% endif %}
 
     {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
     {% if listing.status == 'sold' %}
       <p class="muted">Este carro ya se vendió.</p>
     {% elif listing.status == 'reserved' %}
       <p class="muted">Hay una venta en proceso.</p>
-    {% elif listing.phone %}
-      <a class="btn btn-block btn-wa" href="https://wa.me/{{ listing.phone|replace(' ', '')|replace('+', '')|replace('-', '') }}" target="_blank" rel="noopener">Contactar por WhatsApp</a>
+    {% elif me and me.id == listing.user_id %}
+      <a class="btn btn-block" href="/mensajes">Ver mensajes</a>
+    {% elif me %}
+      <a class="btn btn-block" href="/chat/{{ listing.id }}">Hablar en MotorCriollo</a>
+      <p class="muted" style="margin-top:8px">El trato es por la web. El WhatsApp no se publica aquí.</p>
+    {% else %}
+      <a class="btn btn-block" href="/registro?next=/chat/{{ listing.id }}">Crea una cuenta para hablar</a>
+      <p class="muted" style="margin-top:8px"><a href="/login?next=/chat/{{ listing.id }}">Ya tengo cuenta</a></p>
     {% endif %}
 
     {% if share %}

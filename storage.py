@@ -125,6 +125,15 @@ def init_db() -> None:
             note TEXT DEFAULT '',
             created_at TEXT NOT NULL,
             paid_at TEXT DEFAULT '')""",
+        f"""CREATE TABLE IF NOT EXISTS ratings (
+            id {pk},
+            deal_id INTEGER DEFAULT 0,
+            listing_id INTEGER DEFAULT 0,
+            seller_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            buyer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            stars INTEGER NOT NULL,
+            comment TEXT DEFAULT '',
+            created_at TEXT NOT NULL)""",
     ):
         con.execute(stmt)
     for col, decl in (
@@ -1025,6 +1034,100 @@ def list_deals(status: str | None = None, limit: int = 80) -> list[dict[str, Any
         d["buyer"] = get_user(d["buyer_id"])
         out.append(d)
     return out
+
+
+def add_rating(
+    *,
+    seller_id: int,
+    buyer_id: int,
+    stars: int,
+    comment: str = "",
+    deal_id: int = 0,
+    listing_id: int = 0,
+) -> None:
+    stars = int(stars)
+    if stars < 1 or stars > 5:
+        raise ValueError("La reputación va de 1 a 5")
+    if int(buyer_id) == int(seller_id):
+        raise ValueError("No puedes calificarte a ti mismo")
+    if deal_id:
+        con = connect()
+        exists = execute(
+            con, "SELECT id FROM ratings WHERE deal_id=?", (deal_id,)
+        ).fetchone()
+        con.close()
+        if exists:
+            raise ValueError("Ya calificaste esta venta")
+    con = connect()
+    insert_id(
+        con,
+        """
+        INSERT INTO ratings(deal_id, listing_id, seller_id, buyer_id, stars, comment, created_at)
+        VALUES(?,?,?,?,?,?,?)
+        """,
+        (int(deal_id or 0), int(listing_id or 0), seller_id, buyer_id, stars,
+         (comment or "")[:400], _now()),
+    )
+    con.commit()
+    con.close()
+
+
+def has_rated_deal(deal_id: int) -> bool:
+    if not deal_id:
+        return False
+    con = connect()
+    row = execute(con, "SELECT id FROM ratings WHERE deal_id=?", (deal_id,)).fetchone()
+    con.close()
+    return bool(row)
+
+
+def seller_reputation(user_id: int) -> dict[str, Any]:
+    con = connect()
+    row = execute(
+        con,
+        "SELECT AVG(stars) AS avg, COUNT(*) AS n FROM ratings WHERE seller_id=?",
+        (user_id,),
+    ).fetchone()
+    sales = execute(
+        con,
+        "SELECT COUNT(*) AS n FROM deals WHERE seller_id=? AND status='paid'",
+        (user_id,),
+    ).fetchone()
+    active = execute(
+        con,
+        "SELECT COUNT(*) AS n FROM listings WHERE user_id=? AND status IN ('active','reserved')",
+        (user_id,),
+    ).fetchone()
+    comments = execute(
+        con,
+        """
+        SELECT stars, comment, created_at FROM ratings
+        WHERE seller_id=? AND comment != ''
+        ORDER BY created_at DESC LIMIT 12
+        """,
+        (user_id,),
+    ).fetchall()
+    con.close()
+    n = int(getv(row, "n") or 0)
+    avg = float(getv(row, "avg") or 0)
+    return {
+        "avg": round(avg, 1) if n else 0,
+        "count": n,
+        "sales": int(getv(sales, "n") or 0),
+        "active_listings": int(getv(active, "n") or 0),
+        "comments": [dict(c) for c in comments],
+    }
+
+
+def list_seller_comments(user_id: int, limit: int = 20) -> list[dict[str, Any]]:
+    con = connect()
+    rows = execute(
+        con,
+        "SELECT * FROM ratings WHERE seller_id=? ORDER BY created_at DESC LIMIT ?",
+        (user_id, limit),
+    ).fetchall()
+    con.close()
+    return [dict(r) for r in rows]
 
 
 def count_deals_open() -> int:

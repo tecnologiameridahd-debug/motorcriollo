@@ -19,6 +19,25 @@
       <strong>Comprobante enviado.</strong> Administración está revisando el pago de ${{ deal.commission }}.
     {% elif deal.status == 'paid' %}
       <div class="alert alert-ok">Comisión pagada. Trato cerrado en MotorCriollo.</div>
+      {% if can_rate %}
+      <form class="stack" method="post" action="/c/{{ convo.id }}/calificar">
+        <div class="field">
+          <label>Reputación del vendedor</label>
+          <select name="stars" required>
+            <option value="5">5 — Excelente</option>
+            <option value="4">4 — Bien</option>
+            <option value="3">3 — Regular</option>
+            <option value="2">2 — Mal</option>
+            <option value="1">1 — Muy mal</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Comentario (opcional)</label>
+          <input type="text" name="comment" maxlength="400" placeholder="¿Cómo fue el trato?" />
+        </div>
+        <button class="btn" type="submit">Publicar opinión</button>
+      </form>
+      {% endif %}
     {% elif deal.status == 'cancelled' %}
       <p>Esta venta se canceló.</p>
     {% endif %}
