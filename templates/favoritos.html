@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Favoritos — MotorCriollo{% endblock %}
+{% block content %}
+<h1 class="page-title">Favoritos</h1>
+{% if listings %}
+<div class="grid">
+  {% for l in listings %}
+  <article class="card">
+    <form class="fav-form" method="post" action="/favorito/{{ l.id }}">
+      <button type="submit" class="fav-btn on" aria-label="Quitar">♥</button>
+    </form>
+    <a class="card-link" href="/listing/{{ l.id }}">
+      <div class="card-photo-wrap">
+        {% if l.photo %}
+        <img class="card-photo" src="{{ l.photo }}" alt="{{ l.title }}" />
+        {% else %}
+        <div class="card-photo card-photo-empty">Sin foto</div>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        <h3 class="card-title">{{ l.title }}</h3>
+        <div class="card-price">${{ "{:,}".format(l.price).replace(",", ".") }}</div>
+      </div>
+    </a>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty">
+  <p>Aún no guardas carros. Toca el corazón en un anuncio.</p>
+  <a class="btn" href="/#publicaciones">Ver publicaciones</a>
+</div>
+{% endif %}
+{% endblock %}

@@ -56,9 +56,9 @@
   </div>
   {% endif %}
 
-  <div class="chat-log">
+  <div class="chat-log" id="chatLog" data-cid="{{ convo.id }}" data-me="{{ me.id if me else 0 }}">
     {% for m in messages %}
-    <div class="bubble {% if me and m.user_id == me.id %}mine{% endif %}">
+    <div class="bubble {% if me and m.user_id == me.id %}mine{% endif %}" data-id="{{ m.id }}">
       <div class="bubble-body">{{ m.body }}</div>
       <div class="bubble-time">{{ m.created_at[:16].replace('T', ' ') }}</div>
     </div>
@@ -68,7 +68,7 @@
   </div>
 
   {% if listing and listing.status != 'sold' %}
-  <form class="chat-form" method="post" action="/c/{{ convo.id }}/mensaje">
+  <form class="chat-form" id="chatForm" method="post" action="/c/{{ convo.id }}/mensaje">
     <textarea name="body" required maxlength="2000" placeholder="Escribe aquí…"></textarea>
     <button class="btn" type="submit">Enviar</button>
   </form>
@@ -79,4 +79,61 @@
   {% endif %}
   {% endif %}
 </div>
+<script>
+(function () {
+  var log = document.getElementById("chatLog");
+  var form = document.getElementById("chatForm");
+  if (!log) return;
+  var cid = log.getAttribute("data-cid");
+  var me = parseInt(log.getAttribute("data-me") || "0", 10);
+  function lastId() {
+    var nodes = log.querySelectorAll(".bubble[data-id]");
+    if (!nodes.length) return 0;
+    return parseInt(nodes[nodes.length - 1].getAttribute("data-id") || "0", 10);
+  }
+  function addBubble(m) {
+    if (log.querySelector('.bubble[data-id="' + m.id + '"]')) return;
+    var empty = log.querySelector(".muted");
+    if (empty) empty.remove();
+    var d = document.createElement("div");
+    d.className = "bubble" + (m.user_id === me ? " mine" : "");
+    d.setAttribute("data-id", m.id);
+    var t = (m.created_at || "").slice(0, 16).replace("T", " ");
+    d.innerHTML = '<div class="bubble-body"></div><div class="bubble-time"></div>';
+    d.querySelector(".bubble-body").textContent = m.body || "";
+    d.querySelector(".bubble-time").textContent = t;
+    log.appendChild(d);
+    log.scrollTop = log.scrollHeight;
+  }
+  function poll() {
+    var after = lastId();
+    fetch("/api/c/" + cid + "/mensajes?after=" + after, { credentials: "same-origin" })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data || !data.messages) return;
+        data.messages.forEach(addBubble);
+      })
+      .catch(function () {});
+  }
+  if (form) {
+    form.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var ta = form.querySelector("textarea");
+      var body = (ta.value || "").trim();
+      if (!body) return;
+      var fd = new FormData();
+      fd.append("body", body);
+      ta.value = "";
+      fetch("/api/c/" + cid + "/mensaje", { method: "POST", body: fd, credentials: "same-origin" })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data && data.message) addBubble(data.message);
+        })
+        .catch(function () { ta.value = body; });
+    });
+  }
+  setInterval(poll, 3000);
+  log.scrollTop = log.scrollHeight;
+})();
+</script>
 {% endblock %}

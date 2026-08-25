@@ -115,8 +115,16 @@
         <input type="number" name="commission" min="1" max="500" value="{{ settings.commission }}" />
       </div>
       <div class="field">
-        <label>Cómo pagar (Zelle, Pago Móvil, cuenta…)</label>
-        <textarea name="pay_info" rows="5" maxlength="800">{{ settings.pay_info }}</textarea>
+        <label>Zelle</label>
+        <input type="text" name="pay_zelle" maxlength="120" value="{{ settings.pay_zelle }}" placeholder="correo o nombre Zelle" />
+      </div>
+      <div class="field">
+        <label>Pago Móvil</label>
+        <input type="text" name="pay_pago_movil" maxlength="120" value="{{ settings.pay_pago_movil }}" placeholder="banco, cédula, teléfono" />
+      </div>
+      <div class="field">
+        <label>Otras instrucciones de pago</label>
+        <textarea name="pay_info" rows="4" maxlength="800">{{ settings.pay_info }}</textarea>
       </div>
       <div class="field">
         <label>Carros de demostración</label>

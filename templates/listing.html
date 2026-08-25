@@ -67,7 +67,7 @@
 
     <ul class="spec-list">
       <li><span>Año</span><span>{{ listing.year }}</span></li>
-      <li><span>Kilometraje</span><span>{{ "{:,}".format(listing.mileage) }} mi</span></li>
+      <li><span>Kilometraje</span><span>{{ "{:,}".format(listing.mileage).replace(",", ".") }} km</span></li>
       <li><span>Transmisión</span><span>{{ listing.transmission or "—" }}</span></li>
       <li><span>Combustible</span><span>{{ listing.fuel_type or "—" }}</span></li>
       <li><span>Condición</span><span>{{ listing.condition or "—" }}</span></li>
@@ -98,6 +98,9 @@
     {% elif me and me.id == listing.user_id %}
       <a class="btn btn-block" href="/mensajes">Ver mensajes</a>
     {% elif me %}
+      <form method="post" action="/favorito/{{ listing.id }}" style="margin-bottom:8px">
+        <button class="btn btn-ghost btn-block" type="submit">{% if listing.id in fav_ids %}Quitar de favoritos{% else %}Guardar en favoritos{% endif %}</button>
+      </form>
       <a class="btn btn-block" href="/chat/{{ listing.id }}">Hablar en MotorCriollo</a>
       <p class="muted" style="margin-top:8px">El trato es por la web. El WhatsApp no se publica aquí.</p>
     {% else %}

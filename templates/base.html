@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="/static/style.css?v=13" />
+<link rel="stylesheet" href="/static/style.css?v=14" />
 {% block extra_head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -32,8 +32,9 @@
         {% if not can_publish %}
         <a href="/verificacion">Verificarme</a>
         {% endif %}
+        <a href="/favoritos">Favoritos</a>
         <a href="/mis-publicaciones">Mis publicaciones</a>
-        <a href="/mensajes">Mensajes</a>
+        <a href="/mensajes">Mensajes{% if unread_n %} <span class="nav-badge">{{ unread_n }}</span>{% endif %}</a>
         {% if is_admin %}<a href="/admin">Panel</a>{% endif %}
         <a href="/salir" class="btn btn-ghost btn-sm">Salir</a>
       {% else %}
@@ -58,6 +59,9 @@
       <a href="/">Explorar</a>
       <a href="/publicar">Vender un carro</a>
       <a href="/#como-funciona">Cómo funciona</a>
+      <a href="/carros/caracas">Caracas</a>
+      <a href="/carros/maracaibo">Maracaibo</a>
+      <a href="/carros/valencia">Valencia</a>
       <a href="/#estafas">Cómo evitar estafas</a>
       <a href="mailto:soporte@motorcriollo.store">soporte@motorcriollo.store</a>
       <a href="/terminos">Términos</a>

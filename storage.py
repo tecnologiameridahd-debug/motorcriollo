@@ -22,6 +22,23 @@ TRANSMISSIONS = ["Automática", "Manual"]
 FUEL_TYPES = ["Gasolina", "Diésel", "Híbrido", "Eléctrico", "GLP/GNV"]
 CONDITIONS = ["Nuevo", "Usado - excelente", "Usado - bueno", "Usado - regular", "Para repuestos"]
 STATUSES = ["active", "sold", "inactive", "reserved"]
+VE_STATES = [
+    "Distrito Capital", "Miranda", "Vargas", "Aragua", "Carabobo", "Lara",
+    "Zulia", "Mérida", "Táchira", "Anzoátegui", "Bolívar", "Falcón",
+    "Portuguesa", "Barinas", "Monagas", "Sucre", "Nueva Esparta", "Trujillo",
+    "Yaracuy", "Guárico", "Cojedes", "Apure", "Delta Amacuro", "Amazonas",
+]
+CITY_PAGES = [
+    ("caracas", "Caracas", "Distrito Capital"),
+    ("maracaibo", "Maracaibo", "Zulia"),
+    ("valencia", "Valencia", "Carabobo"),
+    ("maracay", "Maracay", "Aragua"),
+    ("barquisimeto", "Barquisimeto", "Lara"),
+    ("merida", "Mérida", "Mérida"),
+    ("san-cristobal", "San Cristóbal", "Táchira"),
+    ("barcelona", "Barcelona", "Anzoátegui"),
+    ("puerto-ordaz", "Puerto Ordaz", "Bolívar"),
+]
 
 
 def _now() -> str:
@@ -134,6 +151,16 @@ def init_db() -> None:
             stars INTEGER NOT NULL,
             comment TEXT DEFAULT '',
             created_at TEXT NOT NULL)""",
+        """CREATE TABLE IF NOT EXISTS favorites (
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            listing_id INTEGER NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (user_id, listing_id))""",
+        """CREATE TABLE IF NOT EXISTS conversation_reads (
+            conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            last_id INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (conversation_id, user_id))""",
     ):
         con.execute(stmt)
     for col, decl in (
@@ -649,6 +676,7 @@ def browse_listings(
     year_min: int | None = None,
     year_max: int | None = None,
     city: str = "",
+    state: str = "",
     limit: int = 60,
     include_demo: bool = True,
 ) -> list[dict[str, Any]]:
@@ -680,6 +708,9 @@ def browse_listings(
     if city:
         where.append("LOWER(city) LIKE ?")
         params.append(f"%{city.strip().lower()}%")
+    if state:
+        where.append("LOWER(state) LIKE ?")
+        params.append(f"%{state.strip().lower()}%")
     sql_text = (
         "SELECT * FROM listings WHERE " + " AND ".join(where)
         + " ORDER BY created_at DESC LIMIT ?"
@@ -1437,3 +1468,113 @@ def count_reports_open() -> int:
     r = execute(con, "SELECT COUNT(*) AS n FROM reports WHERE status='open'").fetchone()
     con.close()
     return int(getv(r, "n") or 0)
+
+
+def toggle_favorite(user_id: int, listing_id: int) -> bool:
+    con = connect()
+    row = execute(
+        con,
+        "SELECT user_id FROM favorites WHERE user_id=? AND listing_id=?",
+        (user_id, listing_id),
+    ).fetchone()
+    if row:
+        execute(
+            con, "DELETE FROM favorites WHERE user_id=? AND listing_id=?",
+            (user_id, listing_id),
+        )
+        con.commit()
+        con.close()
+        return False
+    execute(
+        con,
+        "INSERT INTO favorites(user_id, listing_id, created_at) VALUES(?,?,?)",
+        (user_id, listing_id, _now()),
+    )
+    con.commit()
+    con.close()
+    return True
+
+
+def is_favorite(user_id: int, listing_id: int) -> bool:
+    con = connect()
+    row = execute(
+        con,
+        "SELECT user_id FROM favorites WHERE user_id=? AND listing_id=?",
+        (user_id, listing_id),
+    ).fetchone()
+    con.close()
+    return bool(row)
+
+
+def list_favorites(user_id: int) -> list[dict[str, Any]]:
+    con = connect()
+    rows = execute(
+        con,
+        "SELECT listing_id FROM favorites WHERE user_id=? ORDER BY created_at DESC",
+        (user_id,),
+    ).fetchall()
+    con.close()
+    out = []
+    for r in rows:
+        item = get_listing(getv(r, "listing_id"))
+        if item:
+            out.append(item)
+    return out
+
+
+def mark_conversation_read(conversation_id: int, user_id: int) -> None:
+    con = connect()
+    last = execute(
+        con,
+        "SELECT id FROM chat_messages WHERE conversation_id=? ORDER BY id DESC LIMIT 1",
+        (conversation_id,),
+    ).fetchone()
+    last_id = int(getv(last, "id") or 0) if last else 0
+    existing = execute(
+        con,
+        "SELECT user_id FROM conversation_reads WHERE conversation_id=? AND user_id=?",
+        (conversation_id, user_id),
+    ).fetchone()
+    if existing:
+        execute(
+            con,
+            "UPDATE conversation_reads SET last_id=? WHERE conversation_id=? AND user_id=?",
+            (last_id, conversation_id, user_id),
+        )
+    else:
+        execute(
+            con,
+            "INSERT INTO conversation_reads(conversation_id, user_id, last_id) VALUES(?,?,?)",
+            (conversation_id, user_id, last_id),
+        )
+    con.commit()
+    con.close()
+
+
+def count_unread(user_id: int) -> int:
+    con = connect()
+    convos = execute(
+        con,
+        "SELECT id FROM conversations WHERE buyer_id=? OR seller_id=?",
+        (user_id, user_id),
+    ).fetchall()
+    n = 0
+    for c in convos:
+        cid = int(getv(c, "id"))
+        seen = execute(
+            con,
+            "SELECT last_id FROM conversation_reads WHERE conversation_id=? AND user_id=?",
+            (cid, user_id),
+        ).fetchone()
+        last_id = int(getv(seen, "last_id") or 0) if seen else 0
+        row = execute(
+            con,
+            """
+            SELECT COUNT(*) AS n FROM chat_messages
+            WHERE conversation_id=? AND id>? AND user_id!=?
+            """,
+            (cid, last_id, user_id),
+        ).fetchone()
+        n += int(getv(row, "n") or 0)
+    con.close()
+    return n

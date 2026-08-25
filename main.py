@@ -42,9 +42,11 @@ from oauth import apple_authorize_url, apple_user, google_authorize_url, google_
 from seed import seed
 from storage import (
     BRANDS,
+    CITY_PAGES,
     CONDITIONS,
     FUEL_TYPES,
     TRANSMISSIONS,
+    VE_STATES,
     accept_deal,
     add_chat_message,
     add_listing_photo,
@@ -61,6 +63,7 @@ from storage import (
     count_deals_open,
     count_kyc_pending,
     count_reports_open,
+    count_unread,
     count_users,
     create_admin_session,
     create_listing,
@@ -81,16 +84,19 @@ from storage import (
     get_user_by_email,
     has_rated_deal,
     init_db,
+    is_favorite,
     list_all_listings,
     list_chat_messages,
     list_conversations,
     list_deals,
+    list_favorites,
     list_kyc,
     list_reports,
     list_user_listings,
     list_users_admin,
     login,
     make_email_token,
+    mark_conversation_read,
     reject_kyc,
     revoke_kyc,
     set_deal_proof,
@@ -99,6 +105,7 @@ from storage import (
     set_password,
     submit_kyc,
     take_email_token,
+    toggle_favorite,
     update_listing,
     update_profile,
     upsert_oauth_user,
@@ -106,6 +113,7 @@ from storage import (
 )
 
 ADMIN_COOKIE = "mc_admin"
+OAUTH_NEXT_COOKIE = "mc_next"
 
 app = FastAPI(title="MotorCriollo")
 app.mount("/static/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
@@ -141,6 +149,12 @@ def _page(request: Request, name: str, **ctx):
     ctx.setdefault("conditions", CONDITIONS)
     ctx.setdefault("commission", _commission())
     ctx.setdefault("pay_info", _pay_info())
+    ctx.setdefault("ve_states", VE_STATES)
+    ctx.setdefault("unread_n", count_unread(user["id"]) if user else 0)
+    ctx.setdefault(
+        "fav_ids",
+        {x["id"] for x in list_favorites(user["id"])} if user else set(),
+    )
     return templates.TemplateResponse(request, name, ctx)
 
 
@@ -152,7 +166,17 @@ def _commission() -> int:
 
 
 def _pay_info() -> str:
-    return (get_setting("pay_info") or "").strip() or PAY_INFO
+    zelle = (get_setting("pay_zelle") or "").strip()
+    pm = (get_setting("pay_pago_movil") or "").strip()
+    extra = (get_setting("pay_info") or "").strip()
+    parts = []
+    if zelle:
+        parts.append(f"Zelle: {zelle}")
+    if pm:
+        parts.append(f"Pago Móvil: {pm}")
+    if extra:
+        parts.append(extra)
+    return " · ".join(parts) if parts else PAY_INFO
 
 
 def _queue_mail(fn, *args, **kwargs) -> None:
@@ -284,7 +308,9 @@ def _finish_oauth(request: Request, user: dict, is_new: bool = False):
     if is_new:
         _queue_welcome_email(user)
     token = create_session(user["id"], SESSION_DAYS)
-    resp = RedirectResponse("/", status_code=303)
+    nxt = _safe_next(request.cookies.get(OAUTH_NEXT_COOKIE) or "")
+    resp = RedirectResponse(nxt, status_code=303)
+    resp.delete_cookie(OAUTH_NEXT_COOKIE)
     return _set_session(resp, token)
 
 
@@ -300,6 +326,7 @@ def home(
     year_min: str = "",
     year_max: str = "",
     city: str = "",
+    state: str = "",
 ):
     def _int(v: str):
         v = (v or "").strip()
@@ -308,14 +335,14 @@ def home(
     show_demo = not hide_demo_now()
     listings = browse_listings(
         q=q, brand=brand, price_min=_int(price_min), price_max=_int(price_max),
-        year_min=_int(year_min), year_max=_int(year_max), city=city,
+        year_min=_int(year_min), year_max=_int(year_max), city=city, state=state,
         include_demo=show_demo,
     )
     return _page(
         request, "index.html", listings=listings,
         filters={
             "q": q, "brand": brand, "price_min": price_min, "price_max": price_max,
-            "year_min": year_min, "year_max": year_max, "city": city,
+            "year_min": year_min, "year_max": year_max, "city": city, "state": state,
         },
         total=count_active_listings(include_demo=show_demo),
     )
@@ -400,6 +427,82 @@ def chat_start(request: Request, listing_id: int):
     return RedirectResponse(f"/c/{convo['id']}", status_code=302)
 
 
+@app.get("/api/c/{cid}/mensajes")
+def api_chat_messages(request: Request, cid: int, after: int = 0):
+    user = me(request)
+    if not user:
+        return JSONResponse({"ok": False}, status_code=401)
+    convo = get_conversation(cid)
+    if not convo or int(user["id"]) not in (int(convo["buyer_id"]), int(convo["seller_id"])):
+        return JSONResponse({"ok": False}, status_code=403)
+    msgs = [m for m in list_chat_messages(cid) if int(m["id"]) > int(after or 0)]
+    mark_conversation_read(cid, user["id"])
+    return {"ok": True, "messages": msgs, "me_id": user["id"]}
+
+
+@app.post("/api/c/{cid}/mensaje")
+def api_chat_send(request: Request, cid: int, body: str = Form(...)):
+    user = me(request)
+    if not user:
+        return JSONResponse({"ok": False}, status_code=401)
+    try:
+        msg = add_chat_message(cid, user["id"], body)
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+    convo = get_conversation(cid)
+    if convo:
+        other_id = convo["seller_id"] if int(user["id"]) == int(convo["buyer_id"]) else convo["buyer_id"]
+        other = get_user(other_id)
+        listing = get_listing(convo["listing_id"])
+        if other and other.get("email") and not str(other.get("email") or "").endswith("@demo.motorcriollo"):
+            _queue_mail(
+                send_chat_notice,
+                other["email"],
+                other.get("name") or "hola",
+                (listing or {}).get("title") or "un carro",
+                (body or "")[:240],
+                cid,
+            )
+    return {"ok": True, "message": msg}
+
+
+@app.post("/favorito/{listing_id}")
+def fav_toggle(request: Request, listing_id: int):
+    user = me(request)
+    if not user:
+        return RedirectResponse(f"/login?next=/listing/{listing_id}", status_code=302)
+    toggle_favorite(user["id"], listing_id)
+    ref = request.headers.get("referer") or ""
+    if "/favoritos" in ref:
+        return RedirectResponse("/favoritos", status_code=303)
+    if f"/listing/{listing_id}" in ref:
+        return RedirectResponse(f"/listing/{listing_id}", status_code=303)
+    return RedirectResponse("/#publicaciones", status_code=303)
+
+
+@app.get("/favoritos", response_class=HTMLResponse)
+def favs_page(request: Request):
+    user = me(request)
+    if not user:
+        return RedirectResponse("/login?next=/favoritos", status_code=302)
+    return _page(request, "favoritos.html", listings=list_favorites(user["id"]))
+
+
+@app.get("/carros/{slug}", response_class=HTMLResponse)
+def city_page(request: Request, slug: str):
+    found = next((c for c in CITY_PAGES if c[0] == slug), None)
+    if not found:
+        return RedirectResponse("/#publicaciones", status_code=302)
+    _slug, city, state = found
+    show_demo = not hide_demo_now()
+    listings = browse_listings(city=city, include_demo=show_demo, limit=60)
+    return _page(
+        request, "ciudad.html",
+        city=city, state=state, slug=slug, listings=listings,
+        total=len(listings),
+    )
+
+
 @app.get("/c/{cid}", response_class=HTMLResponse)
 def chat_view(request: Request, cid: int, error: str = ""):
     user = me(request)
@@ -411,6 +514,7 @@ def chat_view(request: Request, cid: int, error: str = ""):
     listing = get_listing(convo["listing_id"])
     other_id = convo["seller_id"] if int(user["id"]) == int(convo["buyer_id"]) else convo["buyer_id"]
     deal = get_deal_by_conversation(cid)
+    mark_conversation_read(cid, user["id"])
     return _page(
         request,
         "chat.html",
@@ -804,7 +908,7 @@ def salir(request: Request):
 
 
 @app.get("/auth/google")
-def auth_google(request: Request):
+def auth_google(request: Request, next: str = ""):
     if not google_enabled():
         return _page(
             request, "login.html",
@@ -815,6 +919,9 @@ def auth_google(request: Request):
     url = google_authorize_url(f"{_base(request)}/auth/google/callback", state)
     resp = RedirectResponse(url, status_code=302)
     resp.set_cookie(OAUTH_STATE_COOKIE, state, max_age=600, httponly=True, samesite="lax")
+    resp.set_cookie(
+        OAUTH_NEXT_COOKIE, _safe_next(next), max_age=600, httponly=True, samesite="lax"
+    )
     return resp
 
 
@@ -1010,7 +1117,9 @@ def admin_home(request: Request, tab: str = "kyc"):
         reports=list_reports("open"),
         settings={
             "commission": str(_commission()),
-            "pay_info": _pay_info(),
+            "pay_info": get_setting("pay_info") or PAY_INFO,
+            "pay_zelle": get_setting("pay_zelle") or "",
+            "pay_pago_movil": get_setting("pay_pago_movil") or "",
             "hide_demo": get_setting("hide_demo") or "0",
         },
     )
@@ -1084,7 +1193,9 @@ def admin_settings_save(
     request: Request,
     commission: str = Form("20"),
     pay_info: str = Form(""),
-    hide_demo: str = Form("auto"),
+    pay_zelle: str = Form(""),
+    pay_pago_movil: str = Form(""),
+    hide_demo: str = Form("0"),
 ):
     gate = _require_admin(request)
     if gate:
@@ -1092,6 +1203,8 @@ def admin_settings_save(
     digits = "".join(c for c in commission if c.isdigit())
     set_setting("commission", digits or "20")
     set_setting("pay_info", (pay_info or "").strip()[:800])
+    set_setting("pay_zelle", (pay_zelle or "").strip()[:120])
+    set_setting("pay_pago_movil", (pay_pago_movil or "").strip()[:120])
     if hide_demo not in ("1", "0"):
         hide_demo = "0"
     set_setting("hide_demo", hide_demo)

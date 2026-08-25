@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Carros en {{ city }} — MotorCriollo{% endblock %}
+{% block extra_head %}
+<meta name="description" content="Carros usados en venta en {{ city }}, {{ state }}. Trato por la web, vendedores verificados." />
+{% endblock %}
+{% block content %}
+<h1 class="page-title">Carros en {{ city }}</h1>
+<p class="muted">{{ state }} · {{ total }} publicaciones</p>
+{% if listings %}
+<div class="grid">
+  {% for l in listings %}
+  <article class="card">
+    <a class="card-link" href="/listing/{{ l.id }}">
+      <div class="card-photo-wrap">
+        {% if l.photo %}
+        <img class="card-photo" src="{{ l.photo }}" alt="{{ l.title }}" />
+        {% else %}
+        <div class="card-photo card-photo-empty">Sin foto</div>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        <h3 class="card-title">{{ l.title }}</h3>
+        <div class="card-price">${{ "{:,}".format(l.price).replace(",", ".") }}</div>
+        <div class="card-loc">{{ l.city }}</div>
+      </div>
+    </a>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<p class="muted">No hay carros en {{ city }} ahora. <a href="/">Ver todos</a></p>
+{% endif %}
+{% endblock %}

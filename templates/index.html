@@ -2,7 +2,7 @@
 {% block title %}MotorCriollo — carros usados en venta{% endblock %}
 {% block body_class %}page-home{% endblock %}
 {% block before_main %}
-{% set searching = filters.q or filters.brand or filters.price_min or filters.price_max or filters.year_min or filters.year_max or filters.city %}
+{% set searching = filters.q or filters.brand or filters.price_min or filters.price_max or filters.year_min or filters.year_max or filters.city or filters.state %}
 <section class="hero">
   <div class="hero-bg" role="img" aria-label="Carro negro al atardecer con la bandera de Venezuela"></div>
   <div class="hero-shade"></div>
@@ -61,9 +61,18 @@
             <label for="year_max">Año máx.</label>
             <input id="year_max" type="number" name="year_max" value="{{ filters.year_max }}" min="1950" placeholder="Ej: 2024" />
           </div>
-          <div class="field field-full">
+          <div class="field">
             <label for="city">Ciudad</label>
             <input id="city" type="text" name="city" value="{{ filters.city }}" placeholder="Caracas, Maracaibo..." />
+          </div>
+          <div class="field">
+            <label for="state">Estado</label>
+            <select id="state" name="state">
+              <option value="">Todos</option>
+              {% for st in ve_states %}
+              <option value="{{ st }}" {% if filters.state == st %}selected{% endif %}>{{ st }}</option>
+              {% endfor %}
+            </select>
           </div>
         </div>
         <div class="filters-actions">
@@ -78,7 +87,7 @@
 </section>
 {% endblock %}
 {% block content %}
-{% set searching = filters.q or filters.brand or filters.price_min or filters.price_max or filters.year_min or filters.year_max or filters.city %}
+{% set searching = filters.q or filters.brand or filters.price_min or filters.price_max or filters.year_min or filters.year_max or filters.city or filters.state %}
 
 {% if not searching %}
 <section class="trust">
@@ -130,6 +139,11 @@
   <div class="grid">
     {% for l in listings %}
     <article class="card">
+      {% if me %}
+      <form class="fav-form" method="post" action="/favorito/{{ l.id }}">
+        <button type="submit" class="fav-btn {% if l.id in fav_ids %}on{% endif %}" aria-label="Favorito">♥</button>
+      </form>
+      {% endif %}
       <a class="card-link" href="/listing/{{ l.id }}">
         <div class="card-photo-wrap">
           {% if l.status == 'sold' %}<span class="badge-sold">VENDIDO</span>{% endif %}
@@ -202,7 +216,7 @@
     <article>
       <span class="how-n">3</span>
       <h3>Publica y cierra</h3>
-      <p>Hablas con el vendedor por WhatsApp. Si cierran, el vendedor paga la comisión a MotorCriollo.</p>
+      <p>Hablas con el vendedor en la web. Si cierran, el vendedor paga la comisión a MotorCriollo.</p>
     </article>
   </div>
 </section>
@@ -210,11 +224,11 @@
 <section class="scam" id="estafas">
   <h2>Cómo evitar estafas</h2>
   <ol>
-    <li><strong>Mira los sellos.</strong> Nivel 1 = cédula y WhatsApp. Nivel 2 = título, serial y odómetro. Nivel 3 = inspección.</li>
+    <li><strong>Mira los sellos.</strong> Nivel 1 = cédula verificada. Nivel 2 = título, serial y odómetro. Nivel 3 = inspección.</li>
     <li><strong>No pagues por adelantado</strong> ni por transferencia a un desconocido. Ve el carro en persona.</li>
     <li><strong>Compara el odómetro</strong> de la foto con el del tablero real. Si no coinciden, vete.</li>
     <li><strong>Pide ver serial de motor y chasis</strong> y el título. Los datos sensibles pueden ir tapados.</li>
-    <li><strong>WhatsApp del anuncio</strong> debe ser el mismo del vendedor verificado. Si te pasan a otro número, desconfía.</li>
+    <li><strong>Habla solo en MotorCriollo.</strong> Si te piden ir a otro número o pagar por adelantado, reporta el anuncio.</li>
     <li><strong>Si algo se ve mal, avísanos.</strong> Lo revisamos y lo eliminamos. soporte@motorcriollo.store</li>
   </ol>
 </section>
