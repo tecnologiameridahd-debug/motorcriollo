@@ -1,0 +1,20 @@
+{% if pay_usdt_trc20 or pay_usdt_erc20 %}
+<div class="usdt-box">
+  <strong>USDT (Tether)</strong>
+  <p class="muted">Envía el monto exacto. TRC20 es más barato. Luego sube captura del TxID.</p>
+  {% if pay_usdt_trc20 %}
+  <div class="usdt-row">
+    <span class="usdt-net">TRC20</span>
+    <code class="usdt-addr" id="usdtTrc">{{ pay_usdt_trc20 }}</code>
+    <button type="button" class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('usdtTrc').textContent); this.textContent='Copiado';">Copiar</button>
+  </div>
+  {% endif %}
+  {% if pay_usdt_erc20 %}
+  <div class="usdt-row">
+    <span class="usdt-net">ERC20</span>
+    <code class="usdt-addr" id="usdtErc">{{ pay_usdt_erc20 }}</code>
+    <button type="button" class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('usdtErc').textContent); this.textContent='Copiado';">Copiar</button>
+  </div>
+  {% endif %}
+</div>
+{% endif %}

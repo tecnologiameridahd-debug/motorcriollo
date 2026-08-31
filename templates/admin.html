@@ -127,6 +127,14 @@
         <input type="text" name="pay_pago_movil" maxlength="120" value="{{ settings.pay_pago_movil }}" placeholder="banco, cédula, teléfono" />
       </div>
       <div class="field">
+        <label>USDT Tether (TRC20 — Tron, comisión baja)</label>
+        <input type="text" name="pay_usdt_trc20" maxlength="120" value="{{ settings.pay_usdt_trc20 }}" placeholder="Dirección TRC20 (empieza por T…)" />
+      </div>
+      <div class="field">
+        <label>USDT Tether (ERC20 — Ethereum, gas caro)</label>
+        <input type="text" name="pay_usdt_erc20" maxlength="120" value="{{ settings.pay_usdt_erc20 }}" placeholder="Dirección 0x…" />
+      </div>
+      <div class="field">
         <label>Otras instrucciones de pago</label>
         <textarea name="pay_info" rows="4" maxlength="800">{{ settings.pay_info }}</textarea>
       </div>
@@ -139,7 +147,7 @@
       </div>
       <button class="btn" type="submit">Guardar ajustes</button>
     </form>
-    <p class="muted">Stripe (tarjeta y crypto): pon <code>STRIPE_SECRET_KEY</code> en Render. En Stripe Dashboard activa <strong>Stablecoins and Crypto</strong> para que el vendedor pueda pagar en cripto.</p>
+    <p class="muted">Stripe cobra tarjeta y USDC (no USDT). Para Tether pega arriba tu wallet TRC20 y/o ERC20. El vendedor envía USDT y sube el comprobante; tú confirmas el pago.</p>
   {% endif %}
 
   {% if tab == 'reportes' %}

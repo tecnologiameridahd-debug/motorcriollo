@@ -34,10 +34,11 @@
       <p class="muted">Hasta que pagues, el anuncio no se ve en el marketplace.</p>
       {% if stripe_ok %}
       <form method="post" action="/listing/{{ listing.id }}/pagar-publicar">
-        <button class="btn btn-cta" type="submit">Pagar ${{ publish_fee }} con Stripe (tarjeta o crypto)</button>
+        <button class="btn btn-cta" type="submit">Pagar ${{ publish_fee }} con Stripe (tarjeta o USDC)</button>
       </form>
-      <p class="muted">O paga por Zelle / Pago Móvil y sube el comprobante:</p>
       {% endif %}
+      {% include "pay_usdt.html" %}
+      <p class="muted">También Zelle / Pago Móvil. Sube el comprobante:</p>
       {% if listing.publish_proof %}<p>Comprobante enviado. Administración lo revisa.</p>{% endif %}
       <form class="stack" method="post" action="/listing/{{ listing.id }}/comprobante-publicar" enctype="multipart/form-data">
         <div class="field">

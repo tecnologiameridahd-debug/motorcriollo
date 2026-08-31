@@ -44,10 +44,11 @@
     {% if i_am_seller and deal.status in ('accepted','proof') %}
       {% if stripe_ok %}
       <form method="post" action="/c/{{ convo.id }}/pagar-stripe">
-        <button class="btn btn-cta" type="submit">Pagar ${{ deal.commission }} con Stripe (tarjeta o crypto)</button>
+        <button class="btn btn-cta" type="submit">Pagar ${{ deal.commission }} con Stripe (tarjeta o USDC)</button>
       </form>
-      <p class="muted">O paga por Zelle / Pago Móvil y sube el comprobante:</p>
       {% endif %}
+      {% include "pay_usdt.html" %}
+      <p class="muted">También Zelle / Pago Móvil. Sube el comprobante:</p>
       {% if deal.proof_path %}
       <p><a href="{{ deal.proof_path }}" target="_blank" rel="noopener">Ver comprobante</a></p>
       {% endif %}

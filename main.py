@@ -162,6 +162,8 @@ def _page(request: Request, name: str, **ctx):
     ctx.setdefault("commission", _commission())
     ctx.setdefault("publish_fee", _publish_fee())
     ctx.setdefault("pay_info", _pay_info())
+    ctx.setdefault("pay_usdt_trc20", (get_setting("pay_usdt_trc20") or "").strip())
+    ctx.setdefault("pay_usdt_erc20", (get_setting("pay_usdt_erc20") or "").strip())
     ctx.setdefault("stripe_ok", stripe_enabled())
     ctx.setdefault("ve_states", VE_STATES)
     ctx.setdefault("unread_n", count_unread(user["id"]) if user else 0)
@@ -197,6 +199,12 @@ def _pay_info() -> str:
         parts.append(f"Pago Móvil: {pm}")
     if extra:
         parts.append(extra)
+    trc = (get_setting("pay_usdt_trc20") or "").strip()
+    erc = (get_setting("pay_usdt_erc20") or "").strip()
+    if trc:
+        parts.append(f"USDT TRC20: {trc}")
+    if erc:
+        parts.append(f"USDT ERC20: {erc}")
     return " · ".join(parts) if parts else PAY_INFO
 
 
@@ -1305,6 +1313,8 @@ def admin_home(request: Request, tab: str = "kyc"):
             "pay_info": get_setting("pay_info") or PAY_INFO,
             "pay_zelle": get_setting("pay_zelle") or "",
             "pay_pago_movil": get_setting("pay_pago_movil") or "",
+            "pay_usdt_trc20": get_setting("pay_usdt_trc20") or "",
+            "pay_usdt_erc20": get_setting("pay_usdt_erc20") or "",
             "hide_demo": get_setting("hide_demo") or "0",
         },
     )
@@ -1381,6 +1391,8 @@ def admin_settings_save(
     pay_info: str = Form(""),
     pay_zelle: str = Form(""),
     pay_pago_movil: str = Form(""),
+    pay_usdt_trc20: str = Form(""),
+    pay_usdt_erc20: str = Form(""),
     hide_demo: str = Form("0"),
 ):
     gate = _require_admin(request)
@@ -1393,6 +1405,8 @@ def admin_settings_save(
     set_setting("pay_info", (pay_info or "").strip()[:800])
     set_setting("pay_zelle", (pay_zelle or "").strip()[:120])
     set_setting("pay_pago_movil", (pay_pago_movil or "").strip()[:120])
+    set_setting("pay_usdt_trc20", (pay_usdt_trc20 or "").strip()[:120])
+    set_setting("pay_usdt_erc20", (pay_usdt_erc20 or "").strip()[:120])
     if hide_demo not in ("1", "0"):
         hide_demo = "0"
     set_setting("hide_demo", hide_demo)
