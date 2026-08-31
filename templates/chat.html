@@ -42,6 +42,12 @@
       <p>Esta venta se canceló.</p>
     {% endif %}
     {% if i_am_seller and deal.status in ('accepted','proof') %}
+      {% if stripe_ok %}
+      <form method="post" action="/c/{{ convo.id }}/pagar-stripe">
+        <button class="btn btn-cta" type="submit">Pagar ${{ deal.commission }} con Stripe (tarjeta o crypto)</button>
+      </form>
+      <p class="muted">O paga por Zelle / Pago Móvil y sube el comprobante:</p>
+      {% endif %}
       {% if deal.proof_path %}
       <p><a href="{{ deal.proof_path }}" target="_blank" rel="noopener">Ver comprobante</a></p>
       {% endif %}

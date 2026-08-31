@@ -1,5 +1,8 @@
 # Copia a config_local.py y pega tus claves.
 
+# Stripe comisión (sk_live_... en producción)
+STRIPE_SECRET_KEY = ""
+
 GOOGLE_CLIENT_ID = ""
 GOOGLE_CLIENT_SECRET = ""
 

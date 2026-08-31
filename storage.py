@@ -191,6 +191,14 @@ def init_db() -> None:
             con.execute(f"ALTER TABLE listings ADD COLUMN {col} {decl}")
         except Exception:
             pass
+    for col, decl in (
+        ("stripe_session_id", "TEXT DEFAULT ''"),
+        ("pay_method", "TEXT DEFAULT ''"),
+    ):
+        try:
+            con.execute(f"ALTER TABLE deals ADD COLUMN {col} {decl}")
+        except Exception:
+            pass
     if not USE_PG:
         con.execute(
             "CREATE INDEX IF NOT EXISTS idx_listings_status ON listings(status, created_at)"
@@ -1000,6 +1008,27 @@ def accept_deal(conversation_id: int, seller_id: int, commission: int) -> dict[s
     return get_deal(did)
 
 
+def set_deal_stripe_session(deal_id: int, session_id: str) -> None:
+    con = connect()
+    execute(
+        con,
+        "UPDATE deals SET stripe_session_id=? WHERE id=?",
+        ((session_id or "")[:120], deal_id),
+    )
+    con.commit()
+    con.close()
+
+
+def get_deal_by_stripe_session(session_id: str) -> dict[str, Any] | None:
+    sid = (session_id or "").strip()
+    if not sid:
+        return None
+    con = connect()
+    row = execute(con, "SELECT * FROM deals WHERE stripe_session_id=?", (sid,)).fetchone()
+    con.close()
+    return dict(row) if row else None
+
+
 def set_deal_proof(deal_id: int, path: str) -> dict[str, Any] | None:
     con = connect()
     execute(
@@ -1012,16 +1041,25 @@ def set_deal_proof(deal_id: int, path: str) -> dict[str, Any] | None:
     return get_deal(deal_id)
 
 
-def confirm_deal_paid(deal_id: int) -> dict[str, Any] | None:
+def confirm_deal_paid(deal_id: int, pay_method: str = "") -> dict[str, Any] | None:
     deal = get_deal(deal_id)
     if not deal:
         return None
+    if deal.get("status") == "paid":
+        return deal
     con = connect()
-    execute(
-        con,
-        "UPDATE deals SET status='paid', paid_at=? WHERE id=?",
-        (_now(), deal_id),
-    )
+    if pay_method:
+        execute(
+            con,
+            "UPDATE deals SET status='paid', paid_at=?, pay_method=? WHERE id=?",
+            (_now(), (pay_method or "")[:40], deal_id),
+        )
+    else:
+        execute(
+            con,
+            "UPDATE deals SET status='paid', paid_at=? WHERE id=?",
+            (_now(), deal_id),
+        )
     con.commit()
     con.close()
     update_listing(deal["listing_id"], status="sold")

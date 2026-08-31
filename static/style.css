@@ -800,3 +800,4 @@ table.mylist img { width: 64px; height: 48px; object-fit: cover; border-radius: 
   background: #fff7ed; border: 1px solid #fdba74; border-radius: 14px;
   padding: 14px 16px; margin: 12px 0;
 }
+.deal-box .btn-cta { width: 100%; margin: 10px 0 8px; }

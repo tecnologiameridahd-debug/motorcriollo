@@ -7,7 +7,7 @@ import threading
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -28,6 +28,8 @@ from config import (
     admin_password,
     apple_enabled,
     google_enabled,
+    stripe_enabled,
+    stripe_mode,
 )
 from email_utils import (
     email_ready,
@@ -100,6 +102,7 @@ from storage import (
     reject_kyc,
     revoke_kyc,
     set_deal_proof,
+    set_deal_stripe_session,
     set_setting,
     seller_reputation,
     set_password,
@@ -149,6 +152,7 @@ def _page(request: Request, name: str, **ctx):
     ctx.setdefault("conditions", CONDITIONS)
     ctx.setdefault("commission", _commission())
     ctx.setdefault("pay_info", _pay_info())
+    ctx.setdefault("stripe_ok", stripe_enabled())
     ctx.setdefault("ve_states", VE_STATES)
     ctx.setdefault("unread_n", count_unread(user["id"]) if user else 0)
     ctx.setdefault(
@@ -591,6 +595,78 @@ async def chat_proof(request: Request, cid: int, proof: UploadFile = File(None))
         return chat_view(request, cid, error="Sube una foto o captura del pago")
     set_deal_proof(deal["id"], path)
     add_chat_message(cid, user["id"], "Subí el comprobante de la comisión. Administración lo revisa.")
+    return RedirectResponse(f"/c/{cid}", status_code=303)
+
+
+def _public_base(request: Request) -> str:
+    return (PUBLIC_BASE_URL or str(request.base_url).rstrip("/")).rstrip("/")
+
+
+@app.post("/c/{cid}/pagar-stripe")
+def chat_pay_stripe(request: Request, cid: int):
+    user = me(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    if not stripe_enabled():
+        return chat_view(request, cid, error="Stripe no está configurado todavía")
+    convo = get_conversation(cid)
+    deal = get_deal_by_conversation(cid)
+    if not convo or not deal or int(user["id"]) != int(convo["seller_id"]):
+        return RedirectResponse("/mensajes", status_code=302)
+    if deal.get("status") not in ("accepted", "proof"):
+        return RedirectResponse(f"/c/{cid}", status_code=303)
+    listing = get_listing(convo["listing_id"]) or {}
+    base = _public_base(request)
+    from stripe_pay import create_commission_checkout
+
+    try:
+        sess = create_commission_checkout(
+            amount_usd=int(deal["commission"]),
+            deal_id=int(deal["id"]),
+            conversation_id=cid,
+            title=listing.get("title") or "venta",
+            success_url=f"{base}/c/{cid}/pago-ok?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{base}/c/{cid}?pago=0",
+        )
+    except Exception as e:
+        return chat_view(request, cid, error=f"Stripe: {type(e).__name__}")
+    set_deal_stripe_session(deal["id"], sess["id"])
+    return RedirectResponse(sess["url"], status_code=303)
+
+
+@app.get("/c/{cid}/pago-ok")
+def chat_pay_ok(request: Request, cid: int, session_id: str = ""):
+    user = me(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    convo = get_conversation(cid)
+    deal = get_deal_by_conversation(cid)
+    if not convo or not deal or int(user["id"]) not in (
+        int(convo["buyer_id"]),
+        int(convo["seller_id"]),
+    ):
+        return RedirectResponse("/mensajes", status_code=302)
+    sid = (session_id or "").strip()
+    if not sid:
+        return chat_view(request, cid, error="Falta el pago de Stripe")
+    from stripe_pay import retrieve_session
+
+    try:
+        sess = retrieve_session(sid)
+    except Exception:
+        return chat_view(request, cid, error="No se pudo verificar el pago")
+    paid = bool(sess) and str(getattr(sess, "payment_status", "") or "") == "paid"
+    if not paid:
+        return chat_view(request, cid, error="El pago no está confirmado todavía")
+    meta = dict(getattr(sess, "metadata", None) or {})
+    if str(meta.get("deal_id") or "") not in ("", str(deal["id"])):
+        return chat_view(request, cid, error="Ese pago no corresponde a esta venta")
+    set_deal_stripe_session(deal["id"], sid)
+    confirm_deal_paid(deal["id"], pay_method="stripe")
+    add_chat_message(
+        cid, user["id"],
+        f"Comisión de ${deal['commission']} pagada con Stripe. Venta cerrada.",
+    )
     return RedirectResponse(f"/c/{cid}", status_code=303)
 
 
@@ -1270,6 +1346,7 @@ def health():
         "listings": count_active_listings(),
         "users": count_users(),
         "kyc_pending": count_kyc_pending(),
+        "stripe": {"configured": stripe_enabled(), "mode": stripe_mode()},
     }
 
 

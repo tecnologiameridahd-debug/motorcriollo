@@ -119,5 +119,31 @@ def google_enabled() -> bool:
     return bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
 
 
+def stripe_secret() -> str:
+    k = (os.environ.get("STRIPE_SECRET_KEY") or "").strip()
+    if k:
+        return k
+    try:
+        from config_local import STRIPE_SECRET_KEY as _SK
+
+        return str(_SK or "").strip()
+    except Exception:
+        return ""
+
+
+def stripe_enabled() -> bool:
+    k = stripe_secret()
+    return k.startswith("sk_test_") or k.startswith("sk_live_")
+
+
+def stripe_mode() -> str | None:
+    k = stripe_secret()
+    if k.startswith("sk_live_"):
+        return "live"
+    if k.startswith("sk_test_"):
+        return "test"
+    return None
+
+
 def apple_enabled() -> bool:
     return bool(APPLE_CLIENT_ID and APPLE_TEAM_ID and APPLE_KEY_ID and APPLE_PRIVATE_KEY)

@@ -135,6 +135,7 @@
       </div>
       <button class="btn" type="submit">Guardar ajustes</button>
     </form>
+    <p class="muted">Stripe (tarjeta y crypto): pon <code>STRIPE_SECRET_KEY</code> en Render. En Stripe Dashboard activa <strong>Stablecoins and Crypto</strong> para que el vendedor pueda pagar en cripto.</p>
   {% endif %}
 
   {% if tab == 'reportes' %}
@@ -178,7 +179,7 @@
           <td>{% if d.listing %}<a href="/listing/{{ d.listing.id }}">{{ d.listing.title }}</a>{% endif %}</td>
           <td>{{ d.seller.name if d.seller else d.seller_id }}</td>
           <td>{{ d.buyer.name if d.buyer else d.buyer_id }}</td>
-          <td>${{ d.commission }}</td>
+          <td>${{ d.commission }}{% if d.pay_method %}<br><span class="muted">{{ d.pay_method }}</span>{% endif %}</td>
           <td>{{ d.status }}</td>
           <td class="row-actions">
             {% if d.proof_path %}<a class="btn btn-ghost btn-sm" href="{{ d.proof_path }}" target="_blank" rel="noopener">Comprobante</a>{% endif %}

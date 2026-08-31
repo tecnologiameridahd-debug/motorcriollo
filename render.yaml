@@ -20,3 +20,5 @@ services:
         sync: false
       - key: MOTORCRIOLLO_GOOGLE_CLIENT_SECRET
         sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
