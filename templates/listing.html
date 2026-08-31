@@ -28,6 +28,26 @@
     {% endif %}
 
     <h1 style="margin-top:20px">{{ listing.title }}</h1>
+    {% if listing.status == 'pending_pay' and me and me.id == listing.user_id %}
+    <div class="deal-box">
+      <strong>Falta pagar ${{ publish_fee }} para publicar.</strong>
+      <p class="muted">Hasta que pagues, el anuncio no se ve en el marketplace.</p>
+      {% if stripe_ok %}
+      <form method="post" action="/listing/{{ listing.id }}/pagar-publicar">
+        <button class="btn btn-cta" type="submit">Pagar ${{ publish_fee }} con Stripe (tarjeta o crypto)</button>
+      </form>
+      <p class="muted">O paga por Zelle / Pago Móvil y sube el comprobante:</p>
+      {% endif %}
+      {% if listing.publish_proof %}<p>Comprobante enviado. Administración lo revisa.</p>{% endif %}
+      <form class="stack" method="post" action="/listing/{{ listing.id }}/comprobante-publicar" enctype="multipart/form-data">
+        <div class="field">
+          <label>Comprobante</label>
+          <input type="file" name="proof" accept="image/*" required />
+        </div>
+        <button class="btn" type="submit">Subir comprobante</button>
+      </form>
+    </div>
+    {% endif %}
     {% with level=listing.verify_level, size='lg' %}
     {% include "verify_badges.html" %}
     {% endwith %}
@@ -91,7 +111,9 @@
     {% endif %}
 
     {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
-    {% if listing.status == 'sold' %}
+    {% if listing.status == 'pending_pay' %}
+      <p class="muted">Este anuncio todavía no está público.</p>
+    {% elif listing.status == 'sold' %}
       <p class="muted">Este carro ya se vendió.</p>
     {% elif listing.status == 'reserved' %}
       <p class="muted">Hay una venta en proceso.</p>

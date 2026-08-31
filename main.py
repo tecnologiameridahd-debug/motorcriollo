@@ -15,6 +15,7 @@ from fastapi.templating import Jinja2Templates
 from config import (
     BASE_DIR,
     COMMISSION_USD,
+    PUBLISH_FEE_USD,
     KYC_DIR,
     MAX_PHOTOS,
     OAUTH_STATE_COOKIE,
@@ -128,6 +129,14 @@ templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 def _startup():
     init_db()
     seed()
+    try:
+        c = (get_setting("commission") or "").strip()
+        if not c or c == "20":
+            set_setting("commission", str(int(COMMISSION_USD)))
+        if not (get_setting("publish_fee") or "").strip():
+            set_setting("publish_fee", str(int(PUBLISH_FEE_USD)))
+    except Exception:
+        pass
 
 
 def me(request: Request):
@@ -151,6 +160,7 @@ def _page(request: Request, name: str, **ctx):
     ctx.setdefault("fuel_types", FUEL_TYPES)
     ctx.setdefault("conditions", CONDITIONS)
     ctx.setdefault("commission", _commission())
+    ctx.setdefault("publish_fee", _publish_fee())
     ctx.setdefault("pay_info", _pay_info())
     ctx.setdefault("stripe_ok", stripe_enabled())
     ctx.setdefault("ve_states", VE_STATES)
@@ -167,6 +177,13 @@ def _commission() -> int:
     if raw.isdigit():
         return max(1, int(raw))
     return int(COMMISSION_USD)
+
+
+def _publish_fee() -> int:
+    raw = (get_setting("publish_fee") or "").strip()
+    if raw.isdigit():
+        return max(1, int(raw))
+    return int(PUBLISH_FEE_USD)
 
 
 def _pay_info() -> str:
@@ -381,12 +398,101 @@ def listing_detail(request: Request, listing_id: int):
     listing = get_listing(listing_id)
     if not listing:
         return _page(request, "listing_missing.html", listing_id=listing_id)
+    user = me(request)
+    if listing.get("status") == "pending_pay":
+        owner = bool(user and int(user["id"]) == int(listing["user_id"]))
+        if not owner and not _admin(request):
+            return _page(request, "listing_missing.html", listing_id=listing_id)
     seller = get_user(listing["user_id"])
     rep = seller_reputation(listing["user_id"]) if listing.get("user_id") else {}
     return _page(
         request, "listing.html", listing=listing, seller=seller, reported=False,
         share=_share(request, listing), reputation=rep,
     )
+
+
+@app.post("/listing/{listing_id}/pagar-publicar")
+def listing_pay_publish(request: Request, listing_id: int):
+    user = me(request)
+    listing = get_listing(listing_id)
+    if not listing or not user or int(user["id"]) != int(listing["user_id"]):
+        return RedirectResponse("/login", status_code=302)
+    if listing.get("status") != "pending_pay":
+        return RedirectResponse(f"/listing/{listing_id}", status_code=303)
+    if not stripe_enabled():
+        return listing_detail(request, listing_id)
+    fee = _publish_fee()
+    base = _public_base(request)
+    from stripe_pay import create_checkout
+
+    try:
+        sess = create_checkout(
+            amount_usd=fee,
+            name=f"Publicar en MotorCriollo — {(listing.get('title') or '')[:50]}",
+            description="Pago para publicar el anuncio (tarjeta o crypto)",
+            success_url=f"{base}/listing/{listing_id}/publicado-ok?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{base}/listing/{listing_id}",
+            metadata={"kind": "publish", "listing_id": str(listing_id)},
+        )
+    except Exception:
+        return _page(
+            request, "listing.html", listing=listing,
+            seller=get_user(listing["user_id"]),
+            error="No se pudo abrir Stripe. Intenta de nuevo.",
+            share=_share(request, listing),
+        )
+    update_listing(listing_id, stripe_publish_session=sess["id"])
+    return RedirectResponse(sess["url"], status_code=303)
+
+
+@app.get("/listing/{listing_id}/publicado-ok")
+def listing_publish_ok(request: Request, listing_id: int, session_id: str = ""):
+    user = me(request)
+    listing = get_listing(listing_id)
+    if not listing or not user or int(user["id"]) != int(listing["user_id"]):
+        return RedirectResponse("/login", status_code=302)
+    sid = (session_id or "").strip()
+    if not sid:
+        return RedirectResponse(f"/listing/{listing_id}", status_code=303)
+    from stripe_pay import retrieve_session
+
+    try:
+        sess = retrieve_session(sid)
+    except Exception:
+        return listing_detail(request, listing_id)
+    paid = bool(sess) and str(getattr(sess, "payment_status", "") or "") == "paid"
+    if not paid:
+        return listing_detail(request, listing_id)
+    meta = dict(getattr(sess, "metadata", None) or {})
+    if str(meta.get("listing_id") or "") not in ("", str(listing_id)):
+        return listing_detail(request, listing_id)
+    update_listing(
+        listing_id,
+        status="active",
+        publish_paid=1,
+        stripe_publish_session=sid,
+    )
+    return RedirectResponse(f"/listing/{listing_id}", status_code=303)
+
+
+@app.post("/listing/{listing_id}/comprobante-publicar")
+async def listing_publish_proof(request: Request, listing_id: int, proof: UploadFile = File(None)):
+    user = me(request)
+    listing = get_listing(listing_id)
+    if not listing or not user or int(user["id"]) != int(listing["user_id"]):
+        return RedirectResponse("/login", status_code=302)
+    if listing.get("status") != "pending_pay":
+        return RedirectResponse(f"/listing/{listing_id}", status_code=303)
+    path = await _save_photo(listing_id, proof)
+    if not path:
+        return _page(
+            request, "listing.html", listing=listing,
+            seller=get_user(listing["user_id"]),
+            error="Sube una foto o captura del pago de publicación",
+            share=_share(request, listing),
+        )
+    update_listing(listing_id, publish_proof=path)
+    return RedirectResponse(f"/listing/{listing_id}", status_code=303)
 
 
 @app.post("/listing/{listing_id}/reportar")
@@ -420,7 +526,7 @@ def chat_start(request: Request, listing_id: int):
     if not user:
         return RedirectResponse(f"/login?next=/chat/{listing_id}", status_code=302)
     listing = get_listing(listing_id)
-    if not listing:
+    if not listing or listing.get("status") == "pending_pay":
         return _page(request, "listing_missing.html", listing_id=listing_id)
     if int(user["id"]) == int(listing["user_id"]):
         return RedirectResponse("/mensajes", status_code=302)
@@ -841,6 +947,8 @@ def cambiar_estado(request: Request, listing_id: int, status: str = Form(...)):
     listing = get_listing(listing_id)
     if not listing or not user or user["id"] != listing["user_id"]:
         return RedirectResponse("/login", status_code=302)
+    if status == "active" and listing.get("status") == "pending_pay" and not int(listing.get("publish_paid") or 0):
+        return RedirectResponse("/mis-publicaciones", status_code=303)
     if status in ("active", "sold", "inactive"):
         update_listing(listing_id, status=status)
     return RedirectResponse("/mis-publicaciones", status_code=303)
@@ -1193,6 +1301,7 @@ def admin_home(request: Request, tab: str = "kyc"):
         reports=list_reports("open"),
         settings={
             "commission": str(_commission()),
+            "publish_fee": str(_publish_fee()),
             "pay_info": get_setting("pay_info") or PAY_INFO,
             "pay_zelle": get_setting("pay_zelle") or "",
             "pay_pago_movil": get_setting("pay_pago_movil") or "",
@@ -1267,7 +1376,8 @@ def admin_kyc_revoke(request: Request, user_id: int, note: str = Form("")):
 @app.post("/admin/ajustes")
 def admin_settings_save(
     request: Request,
-    commission: str = Form("20"),
+    commission: str = Form("80"),
+    publish_fee: str = Form("50"),
     pay_info: str = Form(""),
     pay_zelle: str = Form(""),
     pay_pago_movil: str = Form(""),
@@ -1277,7 +1387,9 @@ def admin_settings_save(
     if gate:
         return gate
     digits = "".join(c for c in commission if c.isdigit())
-    set_setting("commission", digits or "20")
+    set_setting("commission", digits or "80")
+    pfee = "".join(c for c in publish_fee if c.isdigit())
+    set_setting("publish_fee", pfee or "50")
     set_setting("pay_info", (pay_info or "").strip()[:800])
     set_setting("pay_zelle", (pay_zelle or "").strip()[:120])
     set_setting("pay_pago_movil", (pay_pago_movil or "").strip()[:120])
@@ -1303,6 +1415,17 @@ def admin_deal_paid(request: Request, deal_id: int):
         return gate
     confirm_deal_paid(deal_id)
     return RedirectResponse("/admin?tab=pagos", status_code=303)
+
+
+@app.post("/admin/listing/{listing_id}/publicado-pagado")
+def admin_listing_publish_paid(request: Request, listing_id: int):
+    gate = _require_admin(request)
+    if gate:
+        return gate
+    listing = get_listing(listing_id)
+    if listing and listing.get("status") == "pending_pay":
+        update_listing(listing_id, status="active", publish_paid=1)
+    return RedirectResponse("/admin?tab=listings", status_code=303)
 
 
 @app.post("/admin/deal/{deal_id}/cancelar")

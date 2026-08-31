@@ -21,12 +21,14 @@
       <td>${{ "{:,}".format(l.price).replace(",", ".") }}</td>
       <td>
         <span class="status-pill status-{{ l.status }}">
-          {% if l.status == 'active' %}Activo{% elif l.status == 'sold' %}Vendido{% else %}Pausado{% endif %}
+          {% if l.status == 'active' %}Activo{% elif l.status == 'sold' %}Vendido{% elif l.status == 'pending_pay' %}Por pagar ${{ publish_fee }}{% elif l.status == 'reserved' %}Reservado{% else %}Pausado{% endif %}
         </span>
       </td>
       <td class="row-actions">
         <a class="btn btn-ghost btn-sm" href="/listing/{{ l.id }}/editar">Editar</a>
-        {% if l.status != 'sold' %}
+        {% if l.status == 'pending_pay' %}
+        <a class="btn btn-sm" href="/listing/{{ l.id }}">Pagar para publicar</a>
+        {% elif l.status != 'sold' %}
         <form method="post" action="/listing/{{ l.id }}/estado"><input type="hidden" name="status" value="sold" /><button class="btn btn-ghost btn-sm" type="submit">Marcar vendido</button></form>
         {% else %}
         <form method="post" action="/listing/{{ l.id }}/estado"><input type="hidden" name="status" value="active" /><button class="btn btn-ghost btn-sm" type="submit">Reactivar</button></form>

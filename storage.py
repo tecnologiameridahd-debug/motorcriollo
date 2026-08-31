@@ -21,7 +21,7 @@ BRANDS = [
 TRANSMISSIONS = ["Automática", "Manual"]
 FUEL_TYPES = ["Gasolina", "Diésel", "Híbrido", "Eléctrico", "GLP/GNV"]
 CONDITIONS = ["Nuevo", "Usado - excelente", "Usado - bueno", "Usado - regular", "Para repuestos"]
-STATUSES = ["active", "sold", "inactive", "reserved"]
+STATUSES = ["active", "sold", "inactive", "reserved", "pending_pay"]
 VE_STATES = [
     "Distrito Capital", "Miranda", "Vargas", "Aragua", "Carabobo", "Lara",
     "Zulia", "Mérida", "Táchira", "Anzoátegui", "Bolívar", "Falcón",
@@ -199,6 +199,24 @@ def init_db() -> None:
             con.execute(f"ALTER TABLE deals ADD COLUMN {col} {decl}")
         except Exception:
             pass
+    for col, decl in (
+        ("publish_paid", "INTEGER DEFAULT 0"),
+        ("stripe_publish_session", "TEXT DEFAULT ''"),
+        ("publish_proof", "TEXT DEFAULT ''"),
+    ):
+        try:
+            con.execute(f"ALTER TABLE listings ADD COLUMN {col} {decl}")
+        except Exception:
+            pass
+    try:
+        execute(
+            con,
+            """UPDATE listings SET publish_paid=1
+               WHERE status IN ('active','reserved','sold','inactive')
+                 AND (publish_paid IS NULL OR publish_paid=0)""",
+        )
+    except Exception:
+        pass
     if not USE_PG:
         con.execute(
             "CREATE INDEX IF NOT EXISTS idx_listings_status ON listings(status, created_at)"
@@ -566,6 +584,7 @@ def create_listing(
     state: str = "",
     phone: str = "",
     is_demo: bool = False,
+    status: str | None = None,
 ) -> dict[str, Any]:
     title = (title or "").strip()[:120]
     if not title:
@@ -582,20 +601,25 @@ def create_listing(
         raise ValueError("Año inválido")
     if price < 0:
         raise ValueError("Precio inválido")
+    st = status or ("active" if is_demo else "pending_pay")
+    if st not in STATUSES:
+        st = "pending_pay"
+    paid = 1 if is_demo or st == "active" else 0
     con = connect()
     lid = insert_id(
         con,
         """
         INSERT INTO listings(user_id, title, brand, model, year, price, mileage,
                              transmission, fuel_type, condition, description,
-                             city, state, phone, status, is_demo, created_at, updated_at)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                             city, state, phone, status, is_demo, created_at, updated_at,
+                             publish_paid)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """,
         (
             user_id, title, brand[:40], model[:60], year, price, mileage,
             transmission[:20], fuel_type[:20], condition[:30], (description or "")[:2000],
-            (city or "")[:60], (state or "")[:60], (phone or "")[:30], "active",
-            1 if is_demo else 0, _now(), _now(),
+            (city or "")[:60], (state or "")[:60], (phone or "")[:30], st,
+            1 if is_demo else 0, _now(), _now(), paid,
         ),
     )
     con.commit()
@@ -608,6 +632,7 @@ def update_listing(listing_id: int, **fields) -> dict[str, Any] | None:
         "title", "brand", "model", "year", "price", "mileage", "transmission",
         "fuel_type", "condition", "description", "city", "state", "phone", "status",
         "photo_odometer", "photo_serial", "photo_title", "inspected",
+        "publish_paid", "stripe_publish_session", "publish_proof",
     }
     sets, vals = [], []
     for k, v in fields.items():
@@ -629,9 +654,9 @@ def update_listing(listing_id: int, **fields) -> dict[str, Any] | None:
             v = (v or "")[:60]
         if k == "phone":
             v = (v or "")[:30]
-        if k in ("year", "price", "mileage", "inspected"):
+        if k in ("year", "price", "mileage", "inspected", "publish_paid"):
             v = int(v or 0)
-        if k in ("photo_odometer", "photo_serial", "photo_title"):
+        if k in ("photo_odometer", "photo_serial", "photo_title", "stripe_publish_session", "publish_proof"):
             v = (v or "")[:220]
         if k == "status" and v not in STATUSES:
             continue

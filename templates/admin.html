@@ -111,7 +111,11 @@
     <h2>Ajustes de la plataforma</h2>
     <form class="stack wide" method="post" action="/admin/ajustes">
       <div class="field">
-        <label>Comisión del vendedor (USD)</label>
+        <label>Pago por publicar (USD)</label>
+        <input type="number" name="publish_fee" min="1" max="500" value="{{ settings.publish_fee }}" />
+      </div>
+      <div class="field">
+        <label>Comisión si se vende (USD)</label>
         <input type="number" name="commission" min="1" max="500" value="{{ settings.commission }}" />
       </div>
       <div class="field">
@@ -213,6 +217,13 @@
           <td>${{ "{:,}".format(l.price).replace(",", ".") }}</td>
           <td>{{ l.city }}</td>
           <td class="row-actions">
+            {% if l.status == 'pending_pay' %}
+            <span class="status-pill status-inactive">Por pagar publicar</span>
+            {% if l.publish_proof %}<a class="btn btn-ghost btn-sm" href="{{ l.publish_proof }}" target="_blank" rel="noopener">Comprobante</a>{% endif %}
+            <form method="post" action="/admin/listing/{{ l.id }}/publicado-pagado">
+              <button class="btn btn-sm" type="submit">Confirmar pago $ publicar</button>
+            </form>
+            {% endif %}
             {% if l.inspected %}
             <form method="post" action="/admin/listing/{{ l.id }}/inspeccion">
               <input type="hidden" name="inspected" value="0" />
