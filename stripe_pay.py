@@ -58,7 +58,7 @@ def create_commission_checkout(
     return create_checkout(
         amount_usd=amount_usd,
         name=f"Comisión MotorCriollo — {name}",
-        description="Comisión por venta aceptada (tarjeta o crypto)",
+        description="Comisión por venta aceptada (Binance Card Venezuela, tarjeta o USDC)",
         success_url=success_url,
         cancel_url=cancel_url,
         metadata={

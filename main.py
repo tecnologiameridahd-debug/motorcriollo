@@ -193,6 +193,8 @@ def _pay_info() -> str:
     pm = (get_setting("pay_pago_movil") or "").strip()
     extra = (get_setting("pay_info") or "").strip()
     parts = []
+    if "binance card" not in extra.lower():
+        parts.append("Aceptamos Binance Card Venezuela (Mastercard vía Stripe).")
     if zelle:
         parts.append(f"Zelle: {zelle}")
     if pm:
@@ -437,7 +439,7 @@ def listing_pay_publish(request: Request, listing_id: int):
         sess = create_checkout(
             amount_usd=fee,
             name=f"Publicar en MotorCriollo — {(listing.get('title') or '')[:50]}",
-            description="Pago para publicar el anuncio (tarjeta o crypto)",
+            description="Pago para publicar el anuncio (Binance Card Venezuela, tarjeta o USDC)",
             success_url=f"{base}/listing/{listing_id}/publicado-ok?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{base}/listing/{listing_id}",
             metadata={"kind": "publish", "listing_id": str(listing_id)},

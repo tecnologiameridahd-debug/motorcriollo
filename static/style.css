@@ -801,6 +801,62 @@ table.mylist img { width: 64px; height: 48px; object-fit: cover; border-radius: 
   padding: 14px 16px; margin: 12px 0;
 }
 .deal-box .btn-cta { width: 100%; margin: 10px 0 8px; }
+.pay-accept {
+  margin: 14px 0 8px;
+  padding: 14px 16px;
+  background: linear-gradient(180deg, #1e1c12 0%, #111315 100%);
+  color: #f8f5ea;
+  border: 1px solid #f0b90b;
+  border-radius: 14px;
+}
+.pay-accept-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.pay-accept-head p {
+  margin: 4px 0 0;
+  color: #d6cba8;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.pay-binance {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: #f0b90b;
+  color: #1a1400;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  display: grid;
+  place-items: center;
+}
+.pay-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+.pay-chips li {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #2a271c;
+  color: #efe6c8;
+  border: 1px solid #3f3a2a;
+}
+.pay-chips li.on {
+  background: #f0b90b;
+  color: #1a1400;
+  border-color: #f0b90b;
+}
+.how .pay-accept { margin-top: 22px; }
 .usdt-box {
   margin: 10px 0;
   padding: 10px 12px;

@@ -37,7 +37,8 @@ COMMISSION_USD = int(os.environ.get("MOTORCRIOLLO_COMMISSION") or "80")
 PUBLISH_FEE_USD = int(os.environ.get("MOTORCRIOLLO_PUBLISH_FEE") or "50")
 PAY_INFO = (
     os.environ.get("MOTORCRIOLLO_PAY_INFO")
-    or "Paga a MotorCriollo por Stripe, Zelle o Pago Móvil. "
+    or "Aceptamos Binance Card Venezuela (Mastercard vía Stripe), "
+       "tarjeta, USDC, Zelle, Pago Móvil y USDT. "
        "Publicar cuesta $50. Si se vende, la comisión es $80."
 )
 try:

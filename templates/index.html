@@ -194,7 +194,7 @@
   <div class="sell-banner-inner">
     <div>
       <h2>¿Tienes un carro para vender?</h2>
-      <p>Publicar cuesta ${{ publish_fee }}. Si se vende, la comisión es ${{ commission }}.</p>
+      <p>Publicar cuesta ${{ publish_fee }}. Si se vende, la comisión es ${{ commission }}. Aceptamos Binance Card Venezuela.</p>
     </div>
     <a class="btn btn-cta" href="/publicar">Vender mi carro</a>
   </div>
@@ -216,9 +216,10 @@
     <article>
       <span class="how-n">3</span>
       <h3>Publica y cierra</h3>
-      <p>Publicar cuesta ${{ publish_fee }}. El trato es por la web. Si se vende, el vendedor paga ${{ commission }} de comisión.</p>
+      <p>Publicar cuesta ${{ publish_fee }}. El trato es por la web. Si se vende, el vendedor paga ${{ commission }} de comisión. Aceptamos Binance Card Venezuela, Stripe, Zelle, Pago Móvil y USDT.</p>
     </article>
   </div>
+  {% include "pay_methods.html" %}
 </section>
 
 <section class="scam" id="estafas">

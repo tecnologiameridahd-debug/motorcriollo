@@ -32,9 +32,10 @@
     <div class="deal-box">
       <strong>Falta pagar ${{ publish_fee }} para publicar.</strong>
       <p class="muted">Hasta que pagues, el anuncio no se ve en el marketplace.</p>
+      {% include "pay_methods.html" %}
       {% if stripe_ok %}
       <form method="post" action="/listing/{{ listing.id }}/pagar-publicar">
-        <button class="btn btn-cta" type="submit">Pagar ${{ publish_fee }} con Stripe (tarjeta o USDC)</button>
+        <button class="btn btn-cta" type="submit">Pagar ${{ publish_fee }} con Binance Card Venezuela, tarjeta o USDC</button>
       </form>
       {% endif %}
       {% include "pay_usdt.html" %}

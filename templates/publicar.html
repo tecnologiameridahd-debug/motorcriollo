@@ -4,6 +4,7 @@
 <h1 class="page-title">{% if listing %}Editar publicación{% else %}Publicar un carro{% endif %}</h1>
 {% if not listing %}
 <p class="muted">Publicar cuesta <strong>${{ publish_fee }}</strong>. Si vendes el carro, la comisión es <strong>${{ commission }}</strong>.</p>
+{% include "pay_methods.html" %}
 {% endif %}
 
 {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
