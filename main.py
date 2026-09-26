@@ -790,7 +790,10 @@ async def chat_proof(request: Request, cid: int, proof: UploadFile = File(None))
 
 
 def _public_base(request: Request) -> str:
-    return (PUBLIC_BASE_URL or str(request.base_url).rstrip("/")).rstrip("/")
+    base = (PUBLIC_BASE_URL or str(request.base_url).rstrip("/")).rstrip("/")
+    if base.startswith("https://www.motorcriollo.store"):
+        base = "https://motorcriollo.store"
+    return base
 
 
 @app.post("/c/{cid}/pagar-stripe")
