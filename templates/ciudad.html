@@ -36,4 +36,11 @@
 {% else %}
 <p class="muted">No hay carros en {{ city }} ahora. <a href="/">Ver todos</a></p>
 {% endif %}
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[
+{"@type":"ListItem","position":1,"name":"Inicio","item":{{ (_base + "/")|tojson }}},
+{"@type":"ListItem","position":2,"name":{{ state|tojson }},"item":{{ (_base + "/estados/" + state_slug)|tojson }}},
+{"@type":"ListItem","position":3,"name":{{ city|tojson }},"item":{{ (_base + "/carros/" + slug)|tojson }}}
+]}
+</script>
 {% endblock %}

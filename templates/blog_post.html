@@ -38,4 +38,11 @@
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"BlogPosting","headline":{{ post.title|tojson }},"description":{{ post.description|tojson }},"datePublished":"{{ post.date }}","author":{"@type":"Organization","name":"MotorCriollo"},"mainEntityOfPage":"{{ canonical }}"}
 </script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[
+{"@type":"ListItem","position":1,"name":"Inicio","item":{{ (_base + "/")|tojson }}},
+{"@type":"ListItem","position":2,"name":"Blog","item":{{ (_base + "/blog")|tojson }}},
+{"@type":"ListItem","position":3,"name":{{ post.title|tojson }},"item":{{ canonical|tojson }}}
+]}
+</script>
 {% endblock %}

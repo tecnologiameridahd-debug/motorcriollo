@@ -377,8 +377,10 @@ def home(
         year_min=_int(year_min), year_max=_int(year_max), city=city, state=state,
         include_demo=show_demo,
     )
+    base = _public_base(request)
     return _page(
         request, "index.html", listings=listings,
+        canonical=f"{base}/" if not (q or brand or city or state or price_min or price_max or year_min or year_max) else "",
         filters={
             "q": q, "brand": brand, "price_min": price_min, "price_max": price_max,
             "year_min": year_min, "year_max": year_max, "city": city, "state": state,
@@ -699,9 +701,10 @@ def city_page(request: Request, slug: str):
     _slug, city, state = found
     show_demo = not hide_demo_now()
     listings = browse_listings(city=city, include_demo=show_demo, limit=60)
+    state_slug = next((s[0] for s in VE_STATE_CITIES if s[1] == state), "")
     return _page(
         request, "ciudad.html",
-        city=city, state=state, slug=slug, listings=listings,
+        city=city, state=state, slug=slug, state_slug=state_slug, listings=listings,
         total=len(listings),
     )
 

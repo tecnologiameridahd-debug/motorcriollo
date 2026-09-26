@@ -30,6 +30,14 @@
   }
 }
 </script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[
+{"@type":"ListItem","position":1,"name":"Inicio","item":{{ (_base + "/")|tojson }}},
+{"@type":"ListItem","position":2,"name":{{ (listing.state or "Venezuela")|tojson }}},
+{"@type":"ListItem","position":3,"name":{{ (listing.city or "")|tojson }}},
+{"@type":"ListItem","position":4,"name":{{ listing.title|tojson }},"item":{{ (canonical or "")|tojson }}}
+]}
+</script>
 {% endblock %}
 {% block content %}
 <div class="detail">

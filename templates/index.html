@@ -5,6 +5,8 @@
 <meta property="og:title" content="Carros usados en venta en Venezuela | MotorCriollo" />
 <meta property="og:description" content="Compra y vende carros usados en Venezuela. Trato directo con vendedores verificados." />
 <meta property="og:url" content="{{ _base }}/" />
+<meta property="og:image" content="{{ _base }}/static/hero.jpg" />
+<meta name="twitter:card" content="summary_large_image" />
 {% endblock %}
 {% block body_class %}page-home{% endblock %}
 {% block before_main %}
@@ -249,5 +251,41 @@
     <li><strong>Si algo se ve mal, avísanos.</strong> Lo revisamos y lo eliminamos. soporte@motorcriollo.store</li>
   </ol>
 </section>
+
+<section class="container faq" id="preguntas" style="padding-bottom:32px">
+  <h2>Preguntas frecuentes</h2>
+  <details>
+    <summary>¿Cómo compro un carro en MotorCriollo?</summary>
+    <p>Busca por ciudad o estado, revisa los sellos de verificación del anuncio y contacta al vendedor por el chat de la plataforma. Ve el carro en persona antes de pagar.</p>
+  </details>
+  <details>
+    <summary>¿Cuánto cuesta publicar un carro?</summary>
+    <p>Publicar cuesta ${{ publish_fee }} y si se vende, la comisión es de ${{ commission }}. Aceptamos Binance Card Venezuela, Stripe, Zelle, Pago Móvil y USDT.</p>
+  </details>
+  <details>
+    <summary>¿Qué significa que un vendedor esté verificado?</summary>
+    <p>Nivel 1: verificamos su cédula de identidad. Nivel 2: verificamos título, serial y odómetro del carro. Nivel 3: el carro pasó una inspección. Mientras más sellos, más seguro.</p>
+  </details>
+  <details>
+    <summary>¿En qué ciudades de Venezuela hay carros publicados?</summary>
+    <p>En las 24 entidades del país: Caracas, Maracaibo, Valencia, Maracay, Barquisimeto y más de 40 ciudades. Explora por estado en nuestra <a href="#estados">lista de estados</a>.</p>
+  </details>
+  <details>
+    <summary>¿Cómo evito estafas al comprar un carro usado?</summary>
+    <p>No pagues por adelantado, verifica los seriales contra el título, compara el odómetro y habla solo dentro de MotorCriollo. Tenemos una <a href="/blog/como-comprar-carro-usado-venezuela-sin-estafas">guía completa</a> en el blog.</p>
+  </details>
+</section>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
+{"@type":"Question","name":"¿Cómo compro un carro en MotorCriollo?","acceptedAnswer":{"@type":"Answer","text":"Busca por ciudad o estado, revisa los sellos de verificación del anuncio y contacta al vendedor por el chat de la plataforma. Ve el carro en persona antes de pagar."}},
+{"@type":"Question","name":"¿Cuánto cuesta publicar un carro?","acceptedAnswer":{"@type":"Answer","text":"Publicar cuesta ${{ publish_fee }} y si se vende, la comisión es de ${{ commission }}."}},
+{"@type":"Question","name":"¿Qué significa que un vendedor esté verificado?","acceptedAnswer":{"@type":"Answer","text":"Nivel 1: cédula verificada. Nivel 2: título, serial y odómetro verificados. Nivel 3: inspección del carro."}},
+{"@type":"Question","name":"¿En qué ciudades de Venezuela hay carros publicados?","acceptedAnswer":{"@type":"Answer","text":"En las 24 entidades del país: Caracas, Maracaibo, Valencia, Maracay, Barquisimeto y más de 40 ciudades."}},
+{"@type":"Question","name":"¿Cómo evito estafas al comprar un carro usado?","acceptedAnswer":{"@type":"Answer","text":"No pagues por adelantado, verifica los seriales contra el título, compara el odómetro y habla solo dentro de MotorCriollo."}}
+]}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Organization","name":"MotorCriollo","url":"{{ canonical or 'https://motorcriollo.store/' }}","logo":"{{ canonical or 'https://motorcriollo.store/' }}static/logo-header.png","contactPoint":{"@type":"ContactPoint","email":"soporte@motorcriollo.store","contactType":"customer support","areaServed":"VE"}}
+</script>
 {% endif %}
 {% endblock %}
