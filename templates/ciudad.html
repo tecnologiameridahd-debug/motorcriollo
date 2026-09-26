@@ -1,7 +1,13 @@
 {% extends "base.html" %}
-{% block title %}Carros en {{ city }} — MotorCriollo{% endblock %}
+{% block title %}Carros usados en {{ city }} — MotorCriollo{% endblock %}
+{% block meta_description %}Carros usados en venta en {{ city }}, {{ state }}. {{ total }} publicaciones con trato directo y vendedores verificados en MotorCriollo.{% endblock %}
+{% block og_tags %}
+<meta property="og:title" content="Carros usados en {{ city }} — MotorCriollo" />
+<meta property="og:description" content="Carros usados en venta en {{ city }}, {{ state }}. Trato directo, vendedores verificados." />
+<meta property="og:url" content="{{ _base }}/carros/{{ slug }}" />
+{% endblock %}
 {% block extra_head %}
-<meta name="description" content="Carros usados en venta en {{ city }}, {{ state }}. Trato por la web, vendedores verificados." />
+<link rel="canonical" href="{{ _base }}/carros/{{ slug }}" />
 {% endblock %}
 {% block content %}
 <h1 class="page-title">Carros en {{ city }}</h1>
@@ -10,7 +16,7 @@
 <div class="grid">
   {% for l in listings %}
   <article class="card">
-    <a class="card-link" href="/listing/{{ l.id }}">
+    <a class="card-link" href="/carro/{{ listing_slug(l) }}">
       <div class="card-photo-wrap">
         {% if l.photo %}
         <img class="card-photo" src="{{ l.photo }}" alt="{{ l.title }}" />

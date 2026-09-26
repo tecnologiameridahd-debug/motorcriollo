@@ -1,13 +1,35 @@
 {% extends "base.html" %}
 {% block title %}{{ listing.title }} — MotorCriollo{% endblock %}
-{% block extra_head %}
-{% if share %}
-<meta property="og:title" content="{{ listing.title }}" />
-<meta property="og:description" content="{{ listing.brand }} {{ listing.model }} {{ listing.year }} en MotorCriollo" />
-<meta property="og:url" content="{{ share.url }}" />
-{% if share.image %}<meta property="og:image" content="{{ share.image }}" />{% endif %}
+{% block meta_description %}{{ listing.title }} en venta por ${{ "{:,}".format(listing.price).replace(",", ".") }} en {{ listing.city }}{% if listing.state %}, {{ listing.state }}{% endif %}. {{ listing.year }} · {{ "{:,}".format(listing.mileage).replace(",", ".") }} km · {{ listing.transmission or "" }}. Vendedor verificado en MotorCriollo.{% endblock %}
+{% block og_tags %}
+<meta property="og:title" content="{{ listing.title }} — MotorCriollo" />
+<meta property="og:description" content="{{ listing.brand }} {{ listing.model }} {{ listing.year }} por ${{ "{:,}".format(listing.price).replace(",", ".") }} en {{ listing.city }}" />
+<meta property="og:url" content="{{ canonical or share.url }}" />
+{% if share and share.image %}<meta property="og:image" content="{{ share.image }}" />{% endif %}
 <meta name="twitter:card" content="summary_large_image" />
-{% endif %}
+{% endblock %}
+{% block extra_head %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Car",
+  "name": {{ listing.title|tojson }},
+  "brand": {"@type": "Brand", "name": {{ (listing.brand or "")|tojson }}},
+  "model": {{ (listing.model or "")|tojson }},
+  "vehicleModelDate": {{ (listing.year or "")|tojson }},
+  "mileageFromOdometer": {"@type": "QuantitativeValue", "value": {{ listing.mileage or 0 }}, "unitCode": "KMT"},
+  "vehicleTransmission": {{ (listing.transmission or "")|tojson }},
+  "fuelType": {{ (listing.fuel_type or "")|tojson }},
+  {% if listing.photos %}"image": [{% for p in listing.photos %}{{ p|tojson }}{% if not loop.last %}, {% endif %}{% endfor %}],{% endif %}
+  "offers": {
+    "@type": "Offer",
+    "price": {{ listing.price or 0 }},
+    "priceCurrency": "USD",
+    "availability": "https://schema.org/InStock",
+    "url": {{ (canonical or "")|tojson }}
+  }
+}
+</script>
 {% endblock %}
 {% block content %}
 <div class="detail">

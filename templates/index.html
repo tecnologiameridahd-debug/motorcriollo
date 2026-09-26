@@ -1,5 +1,11 @@
 {% extends "base.html" %}
-{% block title %}MotorCriollo — carros usados en venta{% endblock %}
+{% block title %}Carros usados en venta en Venezuela | MotorCriollo{% endblock %}
+{% block meta_description %}Compra y vende carros usados en Venezuela: Caracas, Maracaibo, Valencia y más. Trato directo, vendedores verificados y sin intermediarios.{% endblock %}
+{% block og_tags %}
+<meta property="og:title" content="Carros usados en venta en Venezuela | MotorCriollo" />
+<meta property="og:description" content="Compra y vende carros usados en Venezuela. Trato directo con vendedores verificados." />
+<meta property="og:url" content="{{ _base }}/" />
+{% endblock %}
 {% block body_class %}page-home{% endblock %}
 {% block before_main %}
 {% set searching = filters.q or filters.brand or filters.price_min or filters.price_max or filters.year_min or filters.year_max or filters.city or filters.state %}
@@ -144,7 +150,7 @@
         <button type="submit" class="fav-btn {% if l.id in fav_ids %}on{% endif %}" aria-label="Favorito">♥</button>
       </form>
       {% endif %}
-      <a class="card-link" href="/listing/{{ l.id }}">
+      <a class="card-link" href="/carro/{{ listing_slug(l) }}">
         <div class="card-photo-wrap">
           {% if l.status == 'sold' %}<span class="badge-sold">VENDIDO</span>{% endif %}
           {% if not searching and loop.index <= 2 %}<span class="badge-feat">Publicación destacada</span>{% endif %}

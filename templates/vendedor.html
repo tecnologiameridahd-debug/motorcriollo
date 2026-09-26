@@ -37,7 +37,7 @@
     {% for l in listings %}
     {% if l.status in ('active','reserved') %}
     <article class="card">
-      <a class="card-link" href="/listing/{{ l.id }}">
+      <a class="card-link" href="/carro/{{ listing_slug(l) }}">
         <div class="card-photo-wrap">
           {% if l.photo %}
           <img class="card-photo" src="{{ l.photo }}" alt="{{ l.title }}" />

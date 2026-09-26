@@ -2,13 +2,15 @@
 from __future__ import annotations
 
 import os
+import re
 import secrets
 import threading
+import unicodedata
 from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -167,6 +169,8 @@ def _page(request: Request, name: str, **ctx):
     ctx.setdefault("stripe_ok", stripe_enabled())
     ctx.setdefault("ve_states", VE_STATES)
     ctx.setdefault("unread_n", count_unread(user["id"]) if user else 0)
+    ctx.setdefault("listing_slug", listing_slug)
+    ctx.setdefault("canonical", "")
     ctx.setdefault(
         "fav_ids",
         {x["id"] for x in list_favorites(user["id"])} if user else set(),
@@ -385,7 +389,7 @@ def _share(request: Request, listing: dict) -> dict:
         origin = PUBLIC_BASE_URL.rstrip("/")
     if origin.startswith("https://www.motorcriollo.store"):
         origin = "https://motorcriollo.store"
-    url = f"{origin}/listing/{listing['id']}"
+    url = listing_canonical_url(origin, listing)
     price = "{:,}".format(int(listing.get("price") or 0)).replace(",", ".")
     text = f"{listing.get('title') or 'Carro'} ${price} en MotorCriollo"
     full = f"{text} {url}"
@@ -403,22 +407,93 @@ def _share(request: Request, listing: dict) -> dict:
     }
 
 
-@app.get("/listing/{listing_id}", response_class=HTMLResponse)
-def listing_detail(request: Request, listing_id: int):
-    listing = get_listing(listing_id)
-    if not listing:
-        return _page(request, "listing_missing.html", listing_id=listing_id)
+# ---------------------------------------------------------------- SEO duro
+_SLUG_BAD = re.compile(r"[^a-z0-9]+")
+
+
+def _slugify(*parts: str) -> str:
+    text = "-".join(str(p or "").strip() for p in parts if str(p or "").strip())
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    text = _SLUG_BAD.sub("-", text.lower()).strip("-")
+    return text or "carro"
+
+
+def listing_slug(l: dict) -> str:
+    base = _slugify(l.get("brand"), l.get("model"), l.get("year"), l.get("city"))
+    return f"{base}-{l['id']}"
+
+
+def listing_canonical_url(origin: str, listing: dict) -> str:
+    return f"{origin.rstrip('/')}/carro/{listing_slug(listing)}"
+
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+def robots_txt(request: Request):
+    base = _public_base(request)
+    return f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n"
+
+
+@app.get("/sitemap.xml")
+def sitemap_xml(request: Request):
+    base = _public_base(request)
+    urls: list[tuple[str, str]] = [("/", "1.0")]
+    for slug, _city, _state in CITY_PAGES:
+        urls.append((f"/carros/{slug}", "0.8"))
+    show_demo = not hide_demo_now()
+    for l in browse_listings(limit=1000, include_demo=show_demo):
+        urls.append((f"/carro/{listing_slug(l)}", "0.7"))
+    items = "\n".join(
+        f"  <url><loc>{base}{path}</loc><changefreq>daily</changefreq>"
+        f"<priority>{prio}</priority></url>"
+        for path, prio in urls
+    )
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"{items}\n</urlset>"
+    )
+    return Response(content=xml, media_type="application/xml")
+
+
+def _listing_page(request: Request, listing: dict):
     user = me(request)
     if listing.get("status") == "pending_pay":
         owner = bool(user and int(user["id"]) == int(listing["user_id"]))
         if not owner and not _admin(request):
-            return _page(request, "listing_missing.html", listing_id=listing_id)
+            return _page(request, "listing_missing.html", listing_id=listing["id"])
     seller = get_user(listing["user_id"])
     rep = seller_reputation(listing["user_id"]) if listing.get("user_id") else {}
     return _page(
         request, "listing.html", listing=listing, seller=seller, reported=False,
         share=_share(request, listing), reputation=rep,
+        canonical=listing_canonical_url(_public_base(request), listing),
     )
+
+
+@app.get("/carro/{slug}", response_class=HTMLResponse)
+def listing_detail_slug(request: Request, slug: str):
+    m = re.search(r"-(\d+)$", slug or "")
+    listing_id = int(m.group(1)) if m else 0
+    listing = get_listing(listing_id) if listing_id else None
+    if not listing:
+        return _page(request, "listing_missing.html", listing_id=listing_id)
+    if slug != listing_slug(listing):
+        return RedirectResponse(
+            listing_canonical_url(_public_base(request), listing), status_code=301
+        )
+    return _listing_page(request, listing)
+
+
+@app.get("/listing/{listing_id}", response_class=HTMLResponse)
+def listing_detail(request: Request, listing_id: int):
+    listing = get_listing(listing_id)
+    if not listing:
+        return _page(request, "listing_missing.html", listing_id=listing_id)
+    # URL vieja -> 301 a la URL con slug (SEO)
+    return RedirectResponse(
+        listing_canonical_url(_public_base(request), listing), status_code=301
+    )
+# ------------------------------------------------------------ fin SEO duro
 
 
 @app.post("/listing/{listing_id}/pagar-publicar")

@@ -5,7 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="theme-color" content="#0b0b0c" />
 <title>{% block title %}MotorCriollo{% endblock %}</title>
-<meta name="description" content="Compra y vende carros usados cerca de ti. Directo, sin intermediarios." />
+<meta name="description" content="{% block meta_description %}Compra y vende carros usados en Venezuela. Trato directo con vendedores verificados, sin intermediarios.{% endblock %}" />
+{% block canonical %}{% if canonical %}<link rel="canonical" href="{{ canonical }}" />{% endif %}{% endblock %}
+<meta property="og:site_name" content="MotorCriollo" />
+<meta property="og:type" content="website" />
+{% block og_tags %}{% endblock %}
 <link rel="icon" type="image/svg+xml" href="/static/icon.svg" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
