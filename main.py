@@ -45,6 +45,7 @@ from email_utils import (
 )
 from oauth import apple_authorize_url, apple_user, google_authorize_url, google_user
 from seed import seed
+from blog_posts import BLOG_POSTS
 from storage import (
     BRANDS,
     CITY_PAGES,
@@ -52,6 +53,7 @@ from storage import (
     FUEL_TYPES,
     TRANSMISSIONS,
     VE_STATES,
+    VE_STATE_CITIES,
     accept_deal,
     add_chat_message,
     add_listing_photo,
@@ -171,6 +173,8 @@ def _page(request: Request, name: str, **ctx):
     ctx.setdefault("unread_n", count_unread(user["id"]) if user else 0)
     ctx.setdefault("listing_slug", listing_slug)
     ctx.setdefault("canonical", "")
+    ctx.setdefault("state_pages", VE_STATE_CITIES)
+    ctx.setdefault("blog_posts", BLOG_POSTS)
     ctx.setdefault(
         "fav_ids",
         {x["id"] for x in list_favorites(user["id"])} if user else set(),
@@ -436,9 +440,13 @@ def robots_txt(request: Request):
 @app.get("/sitemap.xml")
 def sitemap_xml(request: Request):
     base = _public_base(request)
-    urls: list[tuple[str, str]] = [("/", "1.0")]
+    urls: list[tuple[str, str]] = [("/", "1.0"), ("/blog", "0.6")]
+    for _sslug, _sname, _cities in VE_STATE_CITIES:
+        urls.append((f"/estados/{_sslug}", "0.8"))
     for slug, _city, _state in CITY_PAGES:
         urls.append((f"/carros/{slug}", "0.8"))
+    for post in BLOG_POSTS:
+        urls.append((f"/blog/{post['slug']}", "0.6"))
     show_demo = not hide_demo_now()
     for l in browse_listings(limit=1000, include_demo=show_demo):
         urls.append((f"/carro/{listing_slug(l)}", "0.7"))
@@ -695,6 +703,41 @@ def city_page(request: Request, slug: str):
         request, "ciudad.html",
         city=city, state=state, slug=slug, listings=listings,
         total=len(listings),
+    )
+
+
+@app.get("/estados/{state_slug}", response_class=HTMLResponse)
+def estado_page(request: Request, state_slug: str):
+    found = next((s for s in VE_STATE_CITIES if s[0] == state_slug), None)
+    if not found:
+        return RedirectResponse("/#publicaciones", status_code=302)
+    _sslug, state, cities = found
+    show_demo = not hide_demo_now()
+    listings = browse_listings(state=state, include_demo=show_demo, limit=60)
+    base = _public_base(request)
+    return _page(
+        request, "estado.html",
+        state=state, state_slug=state_slug, cities=cities,
+        listings=listings, total=len(listings),
+        canonical=f"{base}/estados/{state_slug}",
+    )
+
+
+@app.get("/blog", response_class=HTMLResponse)
+def blog_index(request: Request):
+    base = _public_base(request)
+    return _page(request, "blog_index.html", posts=BLOG_POSTS, canonical=f"{base}/blog")
+
+
+@app.get("/blog/{slug}", response_class=HTMLResponse)
+def blog_post(request: Request, slug: str):
+    post = next((p for p in BLOG_POSTS if p["slug"] == slug), None)
+    if not post:
+        return RedirectResponse("/blog", status_code=302)
+    base = _public_base(request)
+    return _page(
+        request, "blog_post.html", post=post,
+        canonical=f"{base}/blog/{post['slug']}",
     )
 
 

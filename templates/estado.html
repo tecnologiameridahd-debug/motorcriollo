@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Carros usados en {{ state }} {{ year }} | MotorCriollo{% endblock %}
+{% block meta_description %}Carros usados en venta en {{ state }}, Venezuela: {{ cities|map(attribute=1)|join(", ") }}. Anuncios verificados con cédula, papeles e inspección.{% endblock %}
+{% block og_title %}Carros usados en {{ state }} | MotorCriollo{% endblock %}
+{% block og_description %}Explora carros usados verificados en {{ state }}: {% for c in cities[:4] %}{{ c[1] }}{% if not loop.last %}, {% endif %}{% endfor %}.{% endblock %}
+{% block content %}
+<section class="container" style="padding-top:28px">
+  <nav class="muted" style="margin-bottom:8px;font-size:14px"><a href="/">Inicio</a> · <a href="/#publicaciones">Publicaciones</a> · {{ state }}</nav>
+  <h1>Carros usados en {{ state }}</h1>
+  <p class="muted">{{ total }} publicación(es) verificada(s) en {{ state }}, Venezuela.</p>
+
+  <h2 style="margin-top:24px">Ciudades de {{ state }}</h2>
+  <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin:12px 0 28px">
+    {% for cslug, cname in cities %}
+    <a class="card" style="padding:14px" href="/carros/{{ cslug }}"><strong>{{ cname }}</strong><br><span class="muted" style="font-size:13px">Ver carros →</span></a>
+    {% endfor %}
+  </div>
+
+  <h2>Últimas publicaciones en {{ state }}</h2>
+  <div class="grid">
+    {% for l in listings[:12] %}
+    <article class="card">
+      <a class="card-link" href="/carro/{{ listing_slug(l) }}">
+        <div class="card-photo-wrap">
+          {% if l.status == 'sold' %}<span class="badge-sold">VENDIDO</span>{% endif %}
+          {% if l.photo %}
+          <img class="card-photo" src="{{ l.photo }}" alt="{{ l.title }}" loading="lazy" />
+          {% else %}
+          <div class="card-photo card-photo-empty">Sin foto</div>
+          {% endif %}
+        </div>
+        <div class="card-body">
+          <h3 class="card-title">{{ l.title }}</h3>
+          <div class="card-price">${{ "{:,}".format(l.price).replace(",", ".") }}</div>
+          <div class="card-meta">
+            <span>{{ l.year }}</span>
+            {% if l.transmission %}<span>{{ l.transmission }}</span>{% endif %}
+            {% if l.fuel_type %}<span>{{ l.fuel_type }}</span>{% endif %}
+          </div>
+          <div class="card-loc">{{ l.city }}{% if l.state %}, {{ l.state }}{% endif %}</div>
+          {% with level=l.verify_level, size='sm' %}
+          {% include "verify_badges.html" %}
+          {% endwith %}
+        </div>
+      </a>
+    </article>
+    {% else %}
+    <p class="muted">Aún no hay publicaciones en {{ state }}. <a href="/publicar">Sé el primero en publicar →</a></p>
+    {% endfor %}
+  </div>
+
+  <h2 style="margin-top:28px">Otros estados</h2>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 32px">
+    {% for sslug, sname, _c in state_pages %}
+    {% if sslug != state_slug %}<a class="btn ghost" style="padding:8px 12px" href="/estados/{{ sslug }}">{{ sname }}</a>{% endif %}
+    {% endfor %}
+  </div>
+</section>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"CollectionPage","name":"Carros usados en {{ state }}","description":"Carros usados en venta en {{ state }}, Venezuela","url":"{{ canonical }}"}
+</script>
+{% endblock %}

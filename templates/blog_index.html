@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Blog | MotorCriollo{% endblock %}
+{% block meta_description %}Blog de MotorCriollo: guías para comprar y vender carros usados en Venezuela, precios de referencia, cómo evitar estafas y trámites de traspaso.{% endblock %}
+{% block og_title %}Blog de MotorCriollo{% endblock %}
+{% block og_description %}Guías para comprar y vender carros usados en Venezuela: precios, verificación, inspección y traspasos.{% endblock %}
+{% block content %}
+<section class="container" style="padding-top:28px">
+  <nav class="muted" style="margin-bottom:8px;font-size:14px"><a href="/">Inicio</a> · Blog</nav>
+  <h1>Blog de MotorCriollo</h1>
+  <p class="muted">Guías reales para comprar y vender carros usados en Venezuela.</p>
+  <div class="grid" style="margin-top:20px">
+    {% for post in posts %}
+    <a class="card" style="padding:20px" href="/blog/{{ post.slug }}">
+      <div class="muted" style="font-size:13px">{{ post.date }}</div>
+      <h2 style="font-size:20px;margin:8px 0">{{ post.title }}</h2>
+      <p class="muted">{{ post.description }}</p>
+      <span style="color:var(--brand)">Leer artículo →</span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

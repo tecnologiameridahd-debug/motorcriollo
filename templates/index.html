@@ -196,6 +196,16 @@
 </section>
 <p class="who">Proyecto venezolano con soporte real · motorcriollo.store</p>
 
+<section class="container" id="estados" style="padding-top:8px">
+  <h2>Explora por estado</h2>
+  <p class="muted">Carros usados en todos los estados de Venezuela.</p>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 8px">
+    {% for sslug, sname, _c in state_pages %}
+    <a class="btn ghost" style="padding:8px 14px" href="/estados/{{ sslug }}">{{ sname }}</a>
+    {% endfor %}
+  </div>
+</section>
+
 <section class="sell-banner">
   <div class="sell-banner-inner">
     <div>

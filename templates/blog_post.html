@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}{{ post.title }} | MotorCriollo Blog{% endblock %}
+{% block meta_description %}{{ post.description }}{% endblock %}
+{% block og_title %}{{ post.title }}{% endblock %}
+{% block og_description %}{{ post.description }}{% endblock %}
+{% block content %}
+<article class="container" style="padding-top:28px;max-width:760px">
+  <nav class="muted" style="margin-bottom:8px;font-size:14px"><a href="/">Inicio</a> · <a href="/blog">Blog</a> · {{ post.title }}</nav>
+  <div class="muted" style="font-size:14px">{{ post.date }} · MotorCriollo</div>
+  <h1 style="margin:8px 0 20px">{{ post.title }}</h1>
+  <div class="blog-body">
+    {{ post.content | safe }}
+  </div>
+  <div class="card" style="padding:20px;margin:32px 0;background:var(--card)">
+    <h3 style="margin-top:0">¿Buscas carro en Venezuela?</h3>
+    <p class="muted">Explora publicaciones verificadas por estado y ciudad.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <a class="btn" href="/#publicaciones">Ver carros</a>
+      <a class="btn ghost" href="/publicar">Publicar el mío</a>
+    </div>
+  </div>
+  <h3>Más artículos</h3>
+  <div class="grid" style="margin-bottom:32px">
+    {% for p in blog_posts %}
+    {% if p.slug != post.slug %}
+    <a class="card" style="padding:16px" href="/blog/{{ p.slug }}"><strong>{{ p.title }}</strong><br><span class="muted" style="font-size:13px">Leer →</span></a>
+    {% endif %}
+    {% endfor %}
+  </div>
+</article>
+<style>
+.blog-body h2{margin-top:28px;font-size:22px}
+.blog-body p,.blog-body li{line-height:1.75;font-size:16px}
+.blog-body ul,.blog-body ol{padding-left:22px}
+.blog-body li{margin-bottom:8px}
+.blog-body a{color:var(--brand);text-decoration:underline}
+</style>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BlogPosting","headline":{{ post.title|tojson }},"description":{{ post.description|tojson }},"datePublished":"{{ post.date }}","author":{"@type":"Organization","name":"MotorCriollo"},"mainEntityOfPage":"{{ canonical }}"}
+</script>
+{% endblock %}

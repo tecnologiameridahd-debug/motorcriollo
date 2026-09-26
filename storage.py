@@ -28,16 +28,37 @@ VE_STATES = [
     "Portuguesa", "Barinas", "Monagas", "Sucre", "Nueva Esparta", "Trujillo",
     "Yaracuy", "Guárico", "Cojedes", "Apure", "Delta Amacuro", "Amazonas",
 ]
+VE_STATE_CITIES = [
+    ("distrito-capital", "Distrito Capital", [("caracas", "Caracas")]),
+    ("miranda", "Miranda", [("los-teques", "Los Teques"), ("guarenas", "Guarenas"), ("guatire", "Guatire")]),
+    ("la-guaira", "La Guaira", [("la-guaira", "La Guaira")]),
+    ("aragua", "Aragua", [("maracay", "Maracay"), ("turmero", "Turmero"), ("cagua", "Cagua")]),
+    ("carabobo", "Carabobo", [("valencia", "Valencia"), ("puerto-cabello", "Puerto Cabello"), ("guacara", "Guacara")]),
+    ("cojedes", "Cojedes", [("san-carlos", "San Carlos")]),
+    ("guarico", "Guárico", [("san-juan-de-los-morros", "San Juan de los Morros"), ("calabozo", "Calabozo")]),
+    ("lara", "Lara", [("barquisimeto", "Barquisimeto"), ("cabudare", "Cabudare")]),
+    ("yaracuy", "Yaracuy", [("san-felipe", "San Felipe")]),
+    ("falcon", "Falcón", [("coro", "Coro"), ("punto-fijo", "Punto Fijo")]),
+    ("zulia", "Zulia", [("maracaibo", "Maracaibo"), ("cabimas", "Cabimas"), ("ciudad-ojeda", "Ciudad Ojeda")]),
+    ("merida", "Mérida", [("merida", "Mérida"), ("el-vigia", "El Vigía")]),
+    ("tachira", "Táchira", [("san-cristobal", "San Cristóbal")]),
+    ("trujillo", "Trujillo", [("valera", "Valera")]),
+    ("barinas", "Barinas", [("barinas", "Barinas")]),
+    ("portuguesa", "Portuguesa", [("acarigua", "Acarigua"), ("guanare", "Guanare")]),
+    ("apure", "Apure", [("san-fernando-de-apure", "San Fernando de Apure")]),
+    ("bolivar", "Bolívar", [("puerto-ordaz", "Puerto Ordaz"), ("ciudad-bolivar", "Ciudad Bolívar")]),
+    ("anzoategui", "Anzoátegui", [("barcelona", "Barcelona"), ("puerto-la-cruz", "Puerto La Cruz"), ("lecheria", "Lechería"), ("el-tigre", "El Tigre")]),
+    ("monagas", "Monagas", [("maturin", "Maturín")]),
+    ("sucre", "Sucre", [("cumana", "Cumaná"), ("carupano", "Carúpano")]),
+    ("nueva-esparta", "Nueva Esparta", [("porlamar", "Porlamar")]),
+    ("delta-amacuro", "Delta Amacuro", [("tucupita", "Tucupita")]),
+    ("amazonas", "Amazonas", [("puerto-ayacucho", "Puerto Ayacucho")]),
+]
+
 CITY_PAGES = [
-    ("caracas", "Caracas", "Distrito Capital"),
-    ("maracaibo", "Maracaibo", "Zulia"),
-    ("valencia", "Valencia", "Carabobo"),
-    ("maracay", "Maracay", "Aragua"),
-    ("barquisimeto", "Barquisimeto", "Lara"),
-    ("merida", "Mérida", "Mérida"),
-    ("san-cristobal", "San Cristóbal", "Táchira"),
-    ("barcelona", "Barcelona", "Anzoátegui"),
-    ("puerto-ordaz", "Puerto Ordaz", "Bolívar"),
+    (cslug, cname, sname)
+    for _sslug, sname, cities in VE_STATE_CITIES
+    for cslug, cname in cities
 ]
 
 
