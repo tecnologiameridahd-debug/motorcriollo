@@ -4,10 +4,7 @@
 {% block og_tags %}
 <meta property="og:title" content="Carros usados en {{ city }} — MotorCriollo" />
 <meta property="og:description" content="Carros usados en venta en {{ city }}, {{ state }}. Trato directo, vendedores verificados." />
-<meta property="og:url" content="{{ _base }}/carros/{{ slug }}" />
-{% endblock %}
-{% block extra_head %}
-<link rel="canonical" href="{{ _base }}/carros/{{ slug }}" />
+<meta property="og:url" content="{{ _canon_base }}/carros/{{ slug }}" />
 {% endblock %}
 {% block content %}
 <h1 class="page-title">Carros en {{ city }}</h1>
@@ -34,13 +31,13 @@
   {% endfor %}
 </div>
 {% else %}
-<p class="muted">No hay carros en {{ city }} ahora. <a href="/">Ver todos</a></p>
+<p class="muted">Aún no hay carros publicados en {{ city }}. <a href="/publicar">Publica el tuyo</a> o <a href="/estados/{{ state_slug }}">mira todo {{ state }}</a>.</p>
 {% endif %}
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[
-{"@type":"ListItem","position":1,"name":"Inicio","item":{{ (_base + "/")|tojson }}},
-{"@type":"ListItem","position":2,"name":{{ state|tojson }},"item":{{ (_base + "/estados/" + state_slug)|tojson }}},
-{"@type":"ListItem","position":3,"name":{{ city|tojson }},"item":{{ (_base + "/carros/" + slug)|tojson }}}
+{"@type":"ListItem","position":1,"name":"Inicio","item":{{ (_canon_base + "/")|tojson }}},
+{"@type":"ListItem","position":2,"name":{{ state|tojson }},"item":{{ (_canon_base + "/estados/" + state_slug)|tojson }}},
+{"@type":"ListItem","position":3,"name":{{ city|tojson }},"item":{{ (_canon_base + "/carros/" + slug)|tojson }}}
 ]}
 </script>
 {% endblock %}

@@ -344,3 +344,81 @@ def test_upload_size_limit():
                      filename="a.jpg")
     with pytest.raises(ValueError):
         asyncio.run(main._save_photo(1, big))
+
+
+# ---------------------------------------------------------------- sitemap ----
+
+import re  # noqa: E402
+import xml.etree.ElementTree as ET  # noqa: E402
+
+SM = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
+IMG = "{http://www.google.com/schemas/sitemap-image/1.1}"
+
+
+def _locs(xml_text, tag="url"):
+    root = ET.fromstring(xml_text.encode())
+    return root, [e.find(f"{SM}loc").text for e in root.findall(f"{SM}{tag}")]
+
+
+def _get_path(url):
+    from urllib.parse import urlsplit
+    p = urlsplit(url)
+    return p.path + (("?" + p.query) if p.query else "")
+
+
+def test_sitemap_index_and_pages_valid():
+    seller = _user("sm-seller@x.com")
+    l = storage.create_listing(user_id=seller["id"], title="Hilux 2020", brand="Toyota",
+                               model="Hilux", year=2020, price=30000, city="Maracaibo",
+                               state="Zulia", phone="1", status="active")
+    storage.add_listing_photo(l["id"], "/static/uploads/foto.jpg", 0)
+    r = client.get("/sitemap.xml")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("application/xml")
+    root, subs = _locs(r.text, "sitemap")
+    assert root.tag == f"{SM}sitemapindex"
+    assert any(s.endswith("/sitemap-paginas.xml") for s in subs)
+    assert any(s.endswith("/sitemap-carros.xml") for s in subs)
+    for e in root.findall(f"{SM}sitemap"):
+        assert len(e.find(f"{SM}lastmod").text) == 10
+
+    _, pages = _locs(client.get("/sitemap-paginas.xml").text)
+    _, cars_root_text = None, client.get("/sitemap-carros.xml").text
+    croot, cars = _locs(cars_root_text)
+    all_urls = pages + cars
+    assert all("www." not in u and "?" not in u for u in all_urls)
+    assert any(u.endswith("/estados/zulia") for u in pages)
+    assert not any(u.endswith("/estados/amazonas") for u in pages)  # sin anuncios
+    assert any(u.endswith(f"-{l['id']}") for u in cars)
+    assert croot.find(f"{SM}url/{IMG}image/{IMG}loc").text.endswith("/static/uploads/foto.jpg")
+    for u in pages + cars:
+        assert client.get(_get_path(u), follow_redirects=False).status_code == 200, u
+    for e in croot.findall(f"{SM}url"):
+        assert re.fullmatch(r"20\d\d-\d\d-\d\d", e.find(f"{SM}lastmod").text)
+
+
+def test_sitemap_excludes_demo_and_pending():
+    u = _user("sm-pend@x.com")
+    p = _pending_listing(u, sid="cs_sm")
+    text = client.get("/sitemap-carros.xml").text + client.get("/sitemap-paginas.xml").text
+    assert f"-{p['id']}<" not in text
+    for d in storage.browse_listings(limit=500, include_demo=True):
+        if d.get("is_demo"):
+            assert main.listing_slug(d) not in text
+
+
+def test_empty_area_pages_noindex_and_filtered_home():
+    r = client.get("/estados/amazonas")
+    assert r.status_code == 200 and 'name="robots" content="noindex,follow"' in r.text
+    r = client.get("/carros/puerto-ayacucho")
+    if r.status_code == 200:
+        assert 'content="noindex,follow"' in r.text
+    assert 'content="noindex,follow"' in client.get("/?q=toyota").text
+    assert 'name="robots"' not in client.get("/").text
+
+
+def test_robots_txt():
+    t = client.get("/robots.txt").text
+    for p in ("/admin", "/privado/", "/mensajes", "/c/", "/api/", "/*?"):
+        assert f"Disallow: {p}\n" in t
+    assert "Sitemap: https://motorcriollo.store/sitemap.xml" in t
+    assert "Disallow: /carro" not in t and "Disallow: /blog" not in t
