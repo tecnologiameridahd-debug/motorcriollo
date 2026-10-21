@@ -6,7 +6,9 @@
 <meta name="theme-color" content="#0b0b0c" />
 <title>{% block title %}MotorCriollo{% endblock %}</title>
 <meta name="description" content="{% block meta_description %}Compra y vende carros usados en Venezuela. Trato directo con vendedores verificados, sin intermediarios.{% endblock %}" />
-{% block canonical %}{% if canonical %}<link rel="canonical" href="{{ canonical }}" />{% endif %}{% endblock %}
+{% if robots %}<meta name="robots" content="{{ robots }}" />{% endif %}
+{% for t in site_verification %}<meta name="google-site-verification" content="{{ t }}" />
+{% endfor %}{% block canonical %}{% if canonical %}<link rel="canonical" href="{{ canonical }}" />{% endif %}{% endblock %}
 <meta property="og:site_name" content="MotorCriollo" />
 <meta property="og:type" content="website" />
 {% block og_tags %}{% endblock %}

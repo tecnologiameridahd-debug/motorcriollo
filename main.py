@@ -140,6 +140,11 @@ from security import (
 )
 import stripe_pay
 
+# Tokens de verificación de Google Search Console (meta), separados por coma.
+GOOGLE_SITE_VERIFICATION = [
+    t.strip() for t in (os.environ.get("GOOGLE_SITE_VERIFICATION") or "").split(",") if t.strip()
+]
+
 ADMIN_COOKIE = "mc_admin"
 OAUTH_NEXT_COOKIE = "mc_next"
 
@@ -225,6 +230,8 @@ def _page(request: Request, name: str, **ctx):
     ctx.setdefault("unread_n", count_unread(user["id"]) if user else 0)
     ctx.setdefault("listing_slug", listing_slug)
     ctx.setdefault("canonical", "")
+    ctx.setdefault("robots", "")
+    ctx.setdefault("site_verification", GOOGLE_SITE_VERIFICATION)
     ctx.setdefault("state_pages", VE_STATE_CITIES)
     ctx.setdefault("blog_posts", BLOG_POSTS)
     ctx.setdefault("password_min", PASSWORD_MIN_LEN)
@@ -478,9 +485,11 @@ def home(
         include_demo=show_demo,
     )
     base = _public_base(request)
+    filtered = bool(q or brand or city or state or price_min or price_max or year_min or year_max)
     return _page(
         request, "index.html", listings=listings,
-        canonical=f"{base}/" if not (q or brand or city or state or price_min or price_max or year_min or year_max) else "",
+        canonical=f"{base}/",
+        robots="noindex,follow" if filtered else "",
         filters={
             "q": q, "brand": brand, "price_min": price_min, "price_max": price_max,
             "year_min": year_min, "year_max": year_max, "city": city, "state": state,
@@ -538,36 +547,143 @@ def listing_canonical_url(origin: str, listing: dict) -> str:
     return f"{origin.rstrip('/')}/carro/{listing_slug(listing)}"
 
 
+# Rutas privadas o sin valor para buscadores.
+ROBOTS_DISALLOW = (
+    "/admin", "/privado/", "/mensajes", "/c/", "/api/", "/chat/", "/favorito",
+    "/mis-publicaciones", "/verificacion", "/verificar", "/publicar", "/login",
+    "/registro", "/olvide", "/reset", "/salir", "/auth/", "/correo/", "/eliminar-cuenta",
+    "/stripe/", "/*?",
+)
+
+# Fecha real del último cambio de contenido de páginas fijas (actualizar al editarlas).
+SITE_CONTENT_UPDATED = "2026-10-21"
+STATIC_PAGES = (
+    ("/terminos", "2026-08-22", "0.3"),
+    ("/privacidad", "2026-08-22", "0.3"),
+)
+_XML_ESC = str.maketrans({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;"})
+
+
+def _xml(v) -> str:
+    return str(v or "").translate(_XML_ESC)
+
+
+def _day(ts: str) -> str:
+    return (ts or "")[:10]
+
+
+def _abs_url(base: str, path: str) -> str:
+    return path if path.startswith("http") else f"{base}{path}"
+
+
 @app.get("/robots.txt", response_class=PlainTextResponse)
 def robots_txt(request: Request):
     base = _public_base(request)
-    return f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n"
+    lines = ["User-agent: *", "Allow: /"]
+    lines += [f"Disallow: {p}" for p in ROBOTS_DISALLOW]
+    lines += ["", f"Sitemap: {base}/sitemap.xml", ""]
+    return "\n".join(lines)
+
+
+def _public_listings() -> list[dict]:
+    """Anuncios reales visibles (activos o en venta en proceso). Nunca demo."""
+    return browse_listings(limit=5000, include_demo=False)
+
+
+def _latest(listings: list[dict]) -> str:
+    return max((_day(l.get("updated_at") or l.get("created_at")) for l in listings), default="")
+
+
+def _area_pages() -> list[tuple[str, str]]:
+    """Estados y ciudades con al menos un anuncio real: (ruta, lastmod)."""
+    out: list[tuple[str, str]] = []
+    for sslug, sname, _cities in VE_STATE_CITIES:
+        ls = browse_listings(state=sname, include_demo=False, limit=60)
+        if ls:
+            out.append((f"/estados/{sslug}", _latest(ls)))
+    for cslug, cname, _state in CITY_PAGES:
+        ls = browse_listings(city=cname, include_demo=False, limit=60)
+        if ls:
+            out.append((f"/carros/{cslug}", _latest(ls)))
+    return out
+
+
+def _urlset(entries: list[str], images: bool = False) -> Response:
+    ns = 'xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"'
+    if images:
+        ns += ' xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"'
+    xml = '<?xml version="1.0" encoding="UTF-8"?>\n' f"<urlset {ns}>\n" + "\n".join(entries) + "\n</urlset>\n"
+    return Response(content=xml, media_type="application/xml")
+
+
+def _url(loc: str, lastmod: str = "", prio: str = "", images: list[str] | None = None) -> str:
+    parts = [f"<loc>{_xml(loc)}</loc>"]
+    if lastmod:
+        parts.append(f"<lastmod>{_xml(lastmod)}</lastmod>")
+    if prio:
+        parts.append(f"<priority>{prio}</priority>")
+    for img in (images or [])[:10]:
+        parts.append(f"<image:image><image:loc>{_xml(img)}</image:loc></image:image>")
+    return "  <url>" + "".join(parts) + "</url>"
 
 
 @app.get("/sitemap.xml")
 def sitemap_xml(request: Request):
+    """Índice de sitemaps: páginas y anuncios (con fotos)."""
     base = _public_base(request)
-    urls: list[tuple[str, str]] = [("/", "1.0"), ("/blog", "0.6")]
-    for _sslug, _sname, _cities in VE_STATE_CITIES:
-        urls.append((f"/estados/{_sslug}", "0.8"))
-    for slug, _city, _state in CITY_PAGES:
-        urls.append((f"/carros/{slug}", "0.8"))
-    for post in BLOG_POSTS:
-        urls.append((f"/blog/{post['slug']}", "0.6"))
-    # Nunca se indexan carros demo.
-    for l in browse_listings(limit=1000, include_demo=False):
-        urls.append((f"/carro/{listing_slug(l)}", "0.7"))
-    items = "\n".join(
-        f"  <url><loc>{base}{path}</loc><changefreq>daily</changefreq>"
-        f"<priority>{prio}</priority></url>"
-        for path, prio in urls
+    listings = _public_listings()
+    blog_last = max((p.get("date") or "" for p in BLOG_POSTS), default="")
+    pages_last = max(SITE_CONTENT_UPDATED, blog_last, _latest(listings))
+    items = [("/sitemap-paginas.xml", pages_last)]
+    if listings:
+        items.append(("/sitemap-carros.xml", _latest(listings)))
+    body = "\n".join(
+        f"  <sitemap><loc>{_xml(base + path)}</loc><lastmod>{last}</lastmod></sitemap>"
+        for path, last in items
     )
     xml = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-        f"{items}\n</urlset>"
+        '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"{body}\n</sitemapindex>\n"
     )
     return Response(content=xml, media_type="application/xml")
+
+
+@app.get("/sitemap-paginas.xml")
+def sitemap_pages(request: Request):
+    base = _public_base(request)
+    listings = _public_listings()
+    blog_last = max((p.get("date") or "" for p in BLOG_POSTS), default="")
+    entries = [
+        _url(f"{base}/", max(SITE_CONTENT_UPDATED, _latest(listings)), "1.0"),
+        _url(f"{base}/blog", blog_last, "0.6"),
+    ]
+    for post in BLOG_POSTS:
+        entries.append(_url(f"{base}/blog/{post['slug']}", post.get("date") or "", "0.6"))
+    for path, last in _area_pages():
+        entries.append(_url(f"{base}{path}", last, "0.8"))
+    for path, last, prio in STATIC_PAGES:
+        entries.append(_url(f"{base}{path}", last, prio))
+    return _urlset(entries)
+
+
+@app.get("/sitemap-carros.xml")
+def sitemap_listings(request: Request):
+    base = _public_base(request)
+    entries = []
+    for l in _public_listings():
+        imgs = [_abs_url(base, p) for p in (l.get("photos") or []) if p]
+        if l.get("photo_odometer"):
+            imgs.append(_abs_url(base, l["photo_odometer"]))
+        entries.append(
+            _url(
+                listing_canonical_url(base, l),
+                _day(l.get("updated_at") or l.get("created_at")),
+                "0.7",
+                imgs,
+            )
+        )
+    return _urlset(entries, images=True)
 
 
 def _listing_page(request: Request, listing: dict):
@@ -913,10 +1029,14 @@ def city_page(request: Request, slug: str):
     show_demo = _show_demo()
     listings = browse_listings(city=city, include_demo=show_demo, limit=60)
     state_slug = next((s[0] for s in VE_STATE_CITIES if s[1] == state), "")
+    base = _public_base(request)
     return _page(
         request, "ciudad.html",
         city=city, state=state, slug=slug, state_slug=state_slug, listings=listings,
         total=len(listings),
+        canonical=f"{base}/carros/{slug}",
+        # Sin anuncios la página es casi vacía: no se indexa hasta que haya carros.
+        robots="" if listings else "noindex,follow",
     )
 
 
@@ -934,6 +1054,8 @@ def estado_page(request: Request, state_slug: str):
         state=state, state_slug=state_slug, cities=cities,
         listings=listings, total=len(listings),
         canonical=f"{base}/estados/{state_slug}",
+        robots="" if listings else "noindex,follow",
+        year=__import__("datetime").date.today().year,
     )
 
 
