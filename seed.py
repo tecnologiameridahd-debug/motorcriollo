@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import os
+import secrets
 
-from config import DEMO_DIR
+from config import DEMO_DIR, demo_enabled
 from storage import (
+    lock_demo_accounts,
     add_listing_photo,
     add_rating,
     approve_kyc,
@@ -602,7 +604,15 @@ def _clear_stale_demo() -> None:
 
 
 def seed() -> int:
+    """Siembra la data demo SOLO si demo_enabled() (local, o MOTORCRIOLLO_DEMO=1).
+
+    En producción, por defecto, deja las cuentas demo inservibles y no crea nada.
+    Las cuentas demo nunca tienen una clave conocida y no pueden iniciar sesión.
+    """
     init_db()
+    lock_demo_accounts()
+    if not demo_enabled():
+        return 0
     _clear_stale_demo()
 
     users_by_email = {}
@@ -613,7 +623,7 @@ def seed() -> int:
         else:
             user = create_user(
                 email=u["email"],
-                password="demo1234",
+                password=secrets.token_urlsafe(32),
                 name=u["name"],
                 phone=u["phone"],
                 city=u["city"],

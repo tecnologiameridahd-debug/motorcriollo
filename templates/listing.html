@@ -85,7 +85,8 @@
     {% endwith %}
     <div class="desc">{{ listing.description or "Sin descripción adicional." }}</div>
 
-    {% if listing.photo_odometer or listing.photo_serial or listing.photo_title %}
+    {% set can_docs = is_admin or (me and me.id == listing.user_id) %}
+    {% if listing.photo_odometer or (can_docs and (listing.photo_serial or listing.photo_title)) %}
     <h2 class="docs-title">Pruebas del carro</h2>
     <div class="docs-grid">
       {% if listing.photo_odometer %}
@@ -94,19 +95,22 @@
         <figcaption>Tablero / odómetro</figcaption>
       </figure>
       {% endif %}
-      {% if listing.photo_serial %}
+      {% if can_docs and listing.photo_serial %}
       <figure>
-        <img src="{{ listing.photo_serial }}" alt="Serial de motor o chasis" onclick="document.getElementById('mainPhoto').src=this.src" />
-        <figcaption>Serial motor / chasis</figcaption>
+        <img src="{{ listing.photo_serial }}" alt="Serial de motor o chasis" />
+        <figcaption>Serial motor / chasis (solo tú y administración)</figcaption>
       </figure>
       {% endif %}
-      {% if listing.photo_title %}
+      {% if can_docs and listing.photo_title %}
       <figure>
-        <img src="{{ listing.photo_title }}" alt="Título o carnet" onclick="document.getElementById('mainPhoto').src=this.src" />
-        <figcaption>Título o carnet (datos sensibles tapados)</figcaption>
+        <img src="{{ listing.photo_title }}" alt="Título o carnet" />
+        <figcaption>Título o carnet (solo tú y administración)</figcaption>
       </figure>
       {% endif %}
     </div>
+    {% endif %}
+    {% if not can_docs and (listing.photo_serial or listing.photo_title) %}
+    <p class="muted">El vendedor subió serial y título del carro. Por privacidad solo los ve administración.</p>
     {% endif %}
   </div>
 

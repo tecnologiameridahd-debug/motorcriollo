@@ -79,6 +79,8 @@ def google_user(code: str, redirect_uri: str) -> dict[str, str]:
     email = (info.get("email") or "").strip().lower()
     if not email:
         raise RuntimeError("Google no envió el email")
+    if info.get("email_verified") not in (True, "true", "True", 1):
+        raise RuntimeError("Google no confirmó que el email esté verificado")
     return {
         "email": email,
         "name": (info.get("name") or email.split("@")[0])[:40],
@@ -133,6 +135,8 @@ def apple_user(code: str, redirect_uri: str, user_json: str = "") -> dict[str, s
     )
     claims = jwt_payload(tok["id_token"])
     email = (claims.get("email") or "").strip().lower()
+    if email and claims.get("email_verified") not in (True, "true", "True", 1, None):
+        email = ""
     name = ""
     if user_json:
         try:
