@@ -2,11 +2,21 @@
 from __future__ import annotations
 
 import os
+from html import escape as _escape
 
 import requests
 
+
+def esc(v) -> str:
+    """Escapa contenido del usuario para el HTML del correo."""
+    return _escape(str(v or ""), quote=True)
+
+
+def _clean_subject(v: str) -> str:
+    return " ".join(str(v or "").split())[:150]
+
 SITE = (
-    os.environ.get("MOTORCRIOLLO_PUBLIC_URL") or "https://www.motorcriollo.store"
+    os.environ.get("MOTORCRIOLLO_PUBLIC_URL") or "https://motorcriollo.store"
 ).rstrip("/")
 LOGO = f"{SITE}/static/logo-512.jpg"
 _BG = "#0b0f0a"
@@ -25,10 +35,9 @@ def sendgrid_api_key() -> str:
 
 
 def from_email() -> str:
-    # Por defecto el From ya verificado en SendGrid (CoachRadar).
-    # motorcriollo.store aún no está autenticado: si se usa, SendGrid rechaza el envío.
+    # Remitente de MotorCriollo (motorcriollo.store debe estar autenticado en SendGrid).
     return (
-        os.environ.get("SENDGRID_FROM_EMAIL") or "noreply@coachradar.fit"
+        os.environ.get("SENDGRID_FROM_EMAIL") or "soporte@motorcriollo.store"
     ).strip()
 
 
@@ -41,9 +50,8 @@ def reply_to() -> str:
 
 
 def fallback_from() -> str:
-    return (
-        os.environ.get("SENDGRID_FROM_FALLBACK") or "noreply@coachradar.fit"
-    ).strip()
+    # Sin remitente de respaldo por defecto: solo si se configura explícitamente.
+    return (os.environ.get("SENDGRID_FROM_FALLBACK") or "").strip()
 
 
 def email_ready() -> bool:
@@ -52,13 +60,11 @@ def email_ready() -> bool:
 
 
 def email_status() -> dict:
-    key = sendgrid_api_key()
     return {
         "configured": email_ready(),
         "from_email": from_email(),
         "reply_to": reply_to(),
         "fallback_from": fallback_from(),
-        "key_prefix": (key[:5] + "…") if len(key) >= 5 else "(vacía)",
         "last_ok": LAST["ok"],
         "last_status": LAST["status"],
         "last_error": LAST["error"],
@@ -79,11 +85,11 @@ def _html(heading: str, paragraphs: list[str], btn: str, url: str) -> str:
 <img src="{LOGO}" width="56" height="56" alt="MotorCriollo" style="border-radius:12px">
 </td></tr>
 <tr><td style="padding:8px 28px 8px">
-<h1 style="margin:0 0 16px;color:{_TEXT};font-size:20px;text-align:center">{heading}</h1>
+<h1 style="margin:0 0 16px;color:{_TEXT};font-size:20px;text-align:center">{esc(heading)}</h1>
 {rows}
 </td></tr>
 <tr><td align="center" style="padding:8px 28px 28px">
-<a href="{url}" style="display:inline-block;background:{_GREEN};color:{_ON};font-weight:700;text-decoration:none;padding:12px 22px;border-radius:999px">{btn}</a>
+<a href="{esc(url)}" style="display:inline-block;background:{_GREEN};color:{_ON};font-weight:700;text-decoration:none;padding:12px 22px;border-radius:999px">{esc(btn)}</a>
 </td></tr>
 <tr><td style="padding:16px 28px;border-top:1px solid rgba(255,255,255,.08)">
 <p style="margin:0;color:#9db296;font-size:12px;text-align:center">MotorCriollo · motorcriollo.store</p>
@@ -104,7 +110,7 @@ def _post(to: str, subject: str, text: str, html: str, sender: str) -> tuple[int
             "personalizations": [{"to": [{"email": to}]}],
             "from": {"email": sender, "name": from_name()},
             "reply_to": {"email": reply_to()},
-            "subject": subject,
+            "subject": _clean_subject(subject),
             "content": [
                 {"type": "text/plain", "value": text},
                 {"type": "text/html", "value": html},
@@ -160,7 +166,7 @@ def send_verify(to_email: str, name: str, token: str) -> bool:
         f"Hola {name}. Confirma tu correo: {url}",
         _html(
             "Confirma tu correo",
-            [f"Hola {name}. Toca el botón para confirmar que este email es tuyo."],
+            [f"Hola {esc(name)}. Toca el botón para confirmar que este email es tuyo."],
             "Confirmar correo",
             url,
         ),
@@ -174,7 +180,7 @@ def send_welcome(to_email: str, name: str) -> bool:
         f"Hola {name}. ¡Bienvenido a MotorCriollo! Tu cuenta ya está lista: {SITE}",
         _html(
             "Bienvenido a MotorCriollo",
-            [f"Hola {name}. Tu cuenta ya está lista — publica tu carro o busca el próximo."],
+            [f"Hola {esc(name)}. Tu cuenta ya está lista — publica tu carro o busca el próximo."],
             "Abrir MotorCriollo",
             SITE,
         ),
@@ -189,7 +195,7 @@ def send_reset(to_email: str, name: str, token: str) -> bool:
         f"Hola {name}. Cambia tu contraseña: {url}",
         _html(
             "Nueva contraseña",
-            [f"Hola {name}. Este enlace caduca en 2 horas."],
+            [f"Hola {esc(name)}. Este enlace caduca en 2 horas."],
             "Elegir contraseña",
             url,
         ),
@@ -214,10 +220,10 @@ def send_buyer_message(
         f"'{listing_title}'.\n\nMensaje: {message}\n\nContacto: {contacto}\n\nVer publicación: {url}"
     )
     paras = [
-        f"Hola {seller_name}. <b>{buyer_name}</b> está interesado en tu publicación "
-        f"«{listing_title}».",
-        f"Mensaje: {message}",
-        f"Contacto del comprador: {contacto}",
+        f"Hola {esc(seller_name)}. <b>{esc(buyer_name)}</b> está interesado en tu publicación "
+        f"«{esc(listing_title)}».",
+        f"Mensaje: {esc(message)}",
+        f"Contacto del comprador: {esc(contacto)}",
     ]
     return _send(
         to_email,
@@ -242,8 +248,8 @@ def send_chat_notice(
         _html(
             "Tienes un mensaje",
             [
-                f"Hola {name}. Alguien te escribió sobre <b>{listing_title}</b>.",
-                (preview or "")[:280],
+                f"Hola {esc(name)}. Alguien te escribió sobre <b>{esc(listing_title)}</b>.",
+                esc((preview or "")[:280]),
             ],
             "Abrir chat",
             url,
@@ -268,7 +274,7 @@ def send_kyc_decision(
             _html(
                 "Ya puedes publicar",
                 [
-                    f"Hola {name}. Administración aprobó tu verificación.{extra}",
+                    f"Hola {esc(name)}. Administración aprobó tu verificación.{esc(extra)}",
                     "Entra y publica tu carro.",
                 ],
                 "Publicar un carro",
@@ -283,7 +289,7 @@ def send_kyc_decision(
         _html(
             "Hay que corregir documentos",
             [
-                f"Hola {name}. Administración no aprobó esta vez.{motivo}",
+                f"Hola {esc(name)}. Administración no aprobó esta vez.{esc(motivo)}",
                 "Vuelve a subir cédula y comprobante de dirección, más nítidos.",
             ],
             "Enviar de nuevo",

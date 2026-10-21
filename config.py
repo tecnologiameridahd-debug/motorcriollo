@@ -11,10 +11,13 @@ UPLOAD_DIR = (
 )
 DEMO_DIR = os.path.join(BASE_DIR, "static", "demo")
 KYC_DIR = os.path.join(DATA_DIR, "kyc")
+# Documentos del carro (serial, título) y comprobantes de pago: solo dueño y admin.
+PRIVATE_DIR = os.path.join(DATA_DIR, "private")
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(DEMO_DIR, exist_ok=True)
 os.makedirs(KYC_DIR, exist_ok=True)
+os.makedirs(PRIVATE_DIR, exist_ok=True)
 
 DB_PATH = os.path.join(DATA_DIR, "motorcriollo.db")
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
@@ -22,17 +25,20 @@ PERSISTENT = bool(DATABASE_URL or DATA_ROOT)
 PUBLIC_BASE_URL = os.environ.get("MOTORCRIOLLO_PUBLIC_URL", "").rstrip("/")
 if not PUBLIC_BASE_URL and os.environ.get("RENDER"):
     PUBLIC_BASE_URL = "https://www.motorcriollo.store"
+IS_PROD = bool(os.environ.get("RENDER")) or os.environ.get("MOTORCRIOLLO_ENV", "").lower() in ("prod", "production")
 SECRET = os.environ.get("MOTORCRIOLLO_SECRET", "motorcriollo-dev-cambia-esto")
+# Clave del panel: SOLO desde MOTORCRIOLLO_ADMIN (o ADMIN_PASSWORD). Nunca se reutiliza SECRET.
 ADMIN_PASSWORD = (
     os.environ.get("MOTORCRIOLLO_ADMIN") or os.environ.get("ADMIN_PASSWORD") or ""
-).strip() or (
-    SECRET if SECRET != "motorcriollo-dev-cambia-esto" else ""
-)
+).strip()
+ADMIN_MIN_LEN = 12
 PORT = int(os.environ.get("PORT") or os.environ.get("MOTORCRIOLLO_PORT", "8789"))
 SESSION_COOKIE = "mc_session"
 OAUTH_STATE_COOKIE = "mc_oauth"
 SESSION_DAYS = 30
 MAX_PHOTOS = 8
+MAX_UPLOAD_BYTES = 8 * 1024 * 1024
+PASSWORD_MIN_LEN = 8
 COMMISSION_USD = int(os.environ.get("MOTORCRIOLLO_COMMISSION") or "80")
 PUBLISH_FEE_USD = int(os.environ.get("MOTORCRIOLLO_PUBLISH_FEE") or "50")
 PAY_INFO = (
@@ -116,11 +122,32 @@ except ImportError:
 
 
 def admin_password() -> str:
+    """Clave del panel admin. Vacía = panel cerrado.
+
+    En producción exige MOTORCRIOLLO_ADMIN con al menos ADMIN_MIN_LEN caracteres.
+    En local (sin RENDER) usa "criolloadmin" si no hay variable, para desarrollo.
+    """
     if ADMIN_PASSWORD:
+        if IS_PROD and len(ADMIN_PASSWORD) < ADMIN_MIN_LEN:
+            return ""
         return ADMIN_PASSWORD
-    if os.environ.get("RENDER"):
+    if IS_PROD:
         return ""
     return "criolloadmin"
+
+
+def demo_enabled() -> bool:
+    """Carros/cuentas demo: apagados en producción salvo MOTORCRIOLLO_DEMO=1."""
+    v = (os.environ.get("MOTORCRIOLLO_DEMO") or "").strip().lower()
+    if v in ("1", "true", "yes", "on"):
+        return True
+    if v in ("0", "false", "no", "off"):
+        return False
+    return not IS_PROD
+
+
+def stripe_webhook_secret() -> str:
+    return (os.environ.get("STRIPE_WEBHOOK_SECRET") or "").strip()
 
 
 def google_enabled() -> bool:

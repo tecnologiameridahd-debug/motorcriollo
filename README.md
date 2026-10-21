@@ -26,7 +26,7 @@ iniciar.bat
 
 ## Demo
 
-Los usuarios de muestra usan emails `*@demo.motorcriollo` y clave `demo1234` (por ejemplo `carlos@demo.motorcriollo` / `demo1234`).
+Los usuarios de muestra usan emails `*@demo.motorcriollo`. **No se puede iniciar sesión con ellos** (clave aleatoria). La data demo solo se crea en local o si `MOTORCRIOLLO_DEMO=1`; en producción viene apagada.
 
 ## Gmail y Apple
 

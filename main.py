@@ -1,6 +1,7 @@
 """MotorCriollo — marketplace de carros usados (estilo Facebook Marketplace)."""
 from __future__ import annotations
 
+import hmac
 import os
 import re
 import secrets
@@ -17,6 +18,12 @@ from fastapi.templating import Jinja2Templates
 from config import (
     BASE_DIR,
     COMMISSION_USD,
+    IS_PROD,
+    MAX_UPLOAD_BYTES,
+    PASSWORD_MIN_LEN,
+    PRIVATE_DIR,
+    demo_enabled,
+    stripe_webhook_secret,
     PUBLISH_FEE_USD,
     KYC_DIR,
     MAX_PHOTOS,
@@ -118,12 +125,56 @@ from storage import (
     update_profile,
     upsert_oauth_user,
     user_from_session,
+    UnverifiedAccountError,
+    claim_stripe_session,
+    listing_file_paths,
+    user_file_paths,
 )
+from security import (
+    allow as rl_allow,
+    apply_security_headers,
+    blocked as rl_blocked,
+    client_ip,
+    limiter,
+    same_origin_ok,
+)
+import stripe_pay
 
 ADMIN_COOKIE = "mc_admin"
 OAUTH_NEXT_COOKIE = "mc_next"
 
-app = FastAPI(title="MotorCriollo")
+app = FastAPI(
+    title="MotorCriollo",
+    # /docs, /redoc y /openapi.json solo en local.
+    docs_url=None if IS_PROD else "/docs",
+    redoc_url=None if IS_PROD else "/redoc",
+    openapi_url=None if IS_PROD else "/openapi.json",
+)
+
+
+def _extra_hosts() -> set[str]:
+    hosts = {"motorcriollo.store", "www.motorcriollo.store"}
+    if PUBLIC_BASE_URL:
+        from urllib.parse import urlsplit
+
+        hosts.add(urlsplit(PUBLIC_BASE_URL).netloc.lower())
+    return hosts
+
+
+_EXTRA_HOSTS = _extra_hosts()
+
+
+@app.middleware("http")
+async def _security_middleware(request: Request, call_next):
+    if not same_origin_ok(request, _EXTRA_HOSTS):
+        resp = PlainTextResponse("Solicitud bloqueada (origen no permitido).", status_code=403)
+    else:
+        resp = await call_next(request)
+    https = IS_PROD or request.url.scheme == "https" or (
+        request.headers.get("x-forwarded-proto") == "https"
+    )
+    apply_security_headers(request, resp, https)
+    return resp
 app.mount("/static/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
@@ -157,6 +208,7 @@ def _page(request: Request, name: str, **ctx):
     ctx.setdefault("is_admin", _admin(request))
     ctx.setdefault("can_publish", can_publish(user))
     ctx.setdefault("_base", _base(request))
+    ctx.setdefault("_canon_base", _public_base(request))
     ctx.setdefault("google_ok", google_enabled())
     ctx.setdefault("apple_ok", apple_enabled())
     ctx.setdefault("brands", BRANDS)
@@ -175,11 +227,27 @@ def _page(request: Request, name: str, **ctx):
     ctx.setdefault("canonical", "")
     ctx.setdefault("state_pages", VE_STATE_CITIES)
     ctx.setdefault("blog_posts", BLOG_POSTS)
+    ctx.setdefault("password_min", PASSWORD_MIN_LEN)
     ctx.setdefault(
         "fav_ids",
         {x["id"] for x in list_favorites(user["id"])} if user else set(),
     )
     return templates.TemplateResponse(request, name, ctx)
+
+
+def _show_demo() -> bool:
+    """Los carros demo solo se ven si el modo demo está encendido y no se ocultaron."""
+    return demo_enabled() and not hide_demo_now()
+
+
+def _too_many(request: Request, name: str, msg: str = "", **ctx):
+    resp = _page(
+        request, name,
+        error=msg or "Demasiados intentos. Espera unos minutos y vuelve a probar.",
+        **ctx,
+    )
+    resp.status_code = 429
+    return resp
 
 
 def _commission() -> int:
@@ -265,23 +333,57 @@ _PHOTO_MAGIC = {
 }
 
 
-async def _save_photo(listing_id: int, photo: UploadFile | None) -> str:
+async def _read_limited(photo: UploadFile) -> bytes:
+    size = getattr(photo, "size", None)
+    if size is not None and int(size) > MAX_UPLOAD_BYTES:
+        raise ValueError(f"La foto pesa más de {MAX_UPLOAD_BYTES // (1024 * 1024)} MB")
+    data = await photo.read(MAX_UPLOAD_BYTES + 1)
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise ValueError(f"La foto pesa más de {MAX_UPLOAD_BYTES // (1024 * 1024)} MB")
+    return data
+
+
+PRIVATE_PREFIX = "/privado/"
+_PRIVATE_NAME = re.compile(r"^(\d+)_[0-9a-f]{12}\.(jpg|jpeg|png|gif|webp)$")
+
+
+async def _save_photo(listing_id: int, photo: UploadFile | None, private: bool = False) -> str:
+    """Guarda una imagen. private=True: documentos/comprobantes, solo dueño y admin."""
     if not photo or not photo.filename:
         return ""
     ext = Path(photo.filename).suffix.lower()
     check = _PHOTO_MAGIC.get(ext)
     if not check:
         raise ValueError("Foto: usa jpg, png, gif o webp")
-    data = await photo.read()
+    data = await _read_limited(photo)
     if len(data) < 80:
         return ""
     if not check(data):
         raise ValueError("El archivo no es una imagen válida")
-    fname = f"{listing_id}_{secrets.token_hex(6)}{ext}"
-    dest = os.path.join(UPLOAD_DIR, fname)
+    fname = f"{int(listing_id)}_{secrets.token_hex(6)}{ext}"
+    dest = os.path.join(PRIVATE_DIR if private else UPLOAD_DIR, fname)
     with open(dest, "wb") as f:
         f.write(data)
-    return f"/static/uploads/{fname}"
+    return f"{PRIVATE_PREFIX}{fname}" if private else f"/static/uploads/{fname}"
+
+
+def _remove_files(paths: list[str]) -> None:
+    """Borra archivos subidos (nunca toca static/demo)."""
+    for p in paths:
+        p = p or ""
+        if p.startswith("kyc:"):
+            full = os.path.join(KYC_DIR, os.path.basename(p[4:]))
+        elif p.startswith(PRIVATE_PREFIX):
+            full = os.path.join(PRIVATE_DIR, os.path.basename(p))
+        elif p.startswith("/static/uploads/"):
+            full = os.path.join(UPLOAD_DIR, os.path.basename(p))
+        else:
+            continue
+        try:
+            if os.path.isfile(full):
+                os.remove(full)
+        except OSError:
+            pass
 
 
 async def _save_kyc_photo(user_id: int, kind: str, photo: UploadFile | None) -> str:
@@ -291,11 +393,9 @@ async def _save_kyc_photo(user_id: int, kind: str, photo: UploadFile | None) -> 
     check = _PHOTO_MAGIC.get(ext)
     if not check:
         raise ValueError("Foto: usa jpg, png, gif o webp")
-    data = await photo.read()
+    data = await _read_limited(photo)
     if len(data) < 80:
         raise ValueError("La foto está vacía o dañada")
-    if len(data) > 8 * 1024 * 1024:
-        raise ValueError("La foto pesa más de 8 MB")
     if not check(data):
         raise ValueError("El archivo no es una imagen válida")
     fname = f"{int(user_id)}_{kind}{ext}"
@@ -307,7 +407,7 @@ async def _save_kyc_photo(user_id: int, kind: str, photo: UploadFile | None) -> 
 
 async def _save_listing_photos(listing_id: int, files: list[UploadFile | None]) -> int:
     n = 0
-    for i, up in enumerate(files):
+    for i, up in enumerate(files[: MAX_PHOTOS * 2]):
         if not up or not up.filename:
             continue
         path = await _save_photo(listing_id, up)
@@ -371,7 +471,7 @@ def home(
         v = (v or "").strip()
         return int(v) if v.isdigit() else None
 
-    show_demo = not hide_demo_now()
+    show_demo = _show_demo()
     listings = browse_listings(
         q=q, brand=brand, price_min=_int(price_min), price_max=_int(price_max),
         year_min=_int(year_min), year_max=_int(year_max), city=city, state=state,
@@ -389,6 +489,11 @@ def home(
     )
 
 
+def _chat_allowed(user: dict) -> bool:
+    uid = str(user["id"])
+    return rl_allow("chat_user", uid) and rl_allow("chat_user_day", uid)
+
+
 def _share(request: Request, listing: dict) -> dict:
     origin = str(request.base_url).rstrip("/")
     if "onrender.com" in origin and PUBLIC_BASE_URL:
@@ -401,7 +506,7 @@ def _share(request: Request, listing: dict) -> dict:
     full = f"{text} {url}"
     photo = listing.get("photo") or ""
     if photo.startswith("/"):
-        photo = _base(request) + photo
+        photo = _public_base(request) + photo
     return {
         "url": url,
         "text": text,
@@ -449,8 +554,8 @@ def sitemap_xml(request: Request):
         urls.append((f"/carros/{slug}", "0.8"))
     for post in BLOG_POSTS:
         urls.append((f"/blog/{post['slug']}", "0.6"))
-    show_demo = not hide_demo_now()
-    for l in browse_listings(limit=1000, include_demo=show_demo):
+    # Nunca se indexan carros demo.
+    for l in browse_listings(limit=1000, include_demo=False):
         urls.append((f"/carro/{listing_slug(l)}", "0.7"))
     items = "\n".join(
         f"  <url><loc>{base}{path}</loc><changefreq>daily</changefreq>"
@@ -467,6 +572,10 @@ def sitemap_xml(request: Request):
 
 def _listing_page(request: Request, listing: dict):
     user = me(request)
+    if int(listing.get("is_demo") or 0) and not _show_demo() and not _admin(request):
+        resp = _page(request, "listing_missing.html", listing_id=listing["id"])
+        resp.status_code = 404
+        return resp
     if listing.get("status") == "pending_pay":
         owner = bool(user and int(user["id"]) == int(listing["user_id"]))
         if not owner and not _admin(request):
@@ -506,6 +615,51 @@ def listing_detail(request: Request, listing_id: int):
 # ------------------------------------------------------------ fin SEO duro
 
 
+def _fulfill_publish(listing: dict, sess) -> tuple[bool, str]:
+    """Activa el anuncio si la sesión de Stripe es EXACTAMENTE su pago de publicación."""
+    lid = int(listing["id"])
+    ok, why = stripe_pay.verify_paid_session(
+        sess,
+        kind=stripe_pay.KIND_PUBLISH,
+        target_id=lid,
+        expected_cents=int(listing.get("publish_cents") or 0),
+        stored_session_id=listing.get("stripe_publish_session") or "",
+    )
+    if not ok:
+        return False, why
+    ok, _new = claim_stripe_session(str(stripe_pay._get(sess, "id")), stripe_pay.KIND_PUBLISH, lid)
+    if not ok:
+        return False, "ese pago ya se usó"
+    if listing.get("status") == "pending_pay":
+        update_listing(lid, status="active", publish_paid=1)
+    return True, "ok"
+
+
+def _fulfill_commission(deal: dict, sess) -> tuple[bool, str, bool]:
+    """Marca la venta pagada si la sesión es EXACTAMENTE su comisión. (ok, motivo, nueva)."""
+    did = int(deal["id"])
+    ok, why = stripe_pay.verify_paid_session(
+        sess,
+        kind=stripe_pay.KIND_COMMISSION,
+        target_id=did,
+        expected_cents=stripe_pay.amount_cents(int(deal.get("commission") or 0)),
+        stored_session_id=deal.get("stripe_session_id") or "",
+    )
+    if not ok:
+        return False, why, False
+    ok, new = claim_stripe_session(str(stripe_pay._get(sess, "id")), stripe_pay.KIND_COMMISSION, did)
+    if not ok:
+        return False, "ese pago ya se usó", False
+    first = deal.get("status") != "paid"
+    if first:
+        confirm_deal_paid(did, pay_method="stripe")
+        add_chat_message(
+            int(deal["conversation_id"]), int(deal["seller_id"]),
+            f"Comisión de ${deal['commission']} pagada con Stripe. Venta cerrada.",
+        )
+    return True, "ok", first
+
+
 @app.post("/listing/{listing_id}/pagar-publicar")
 def listing_pay_publish(request: Request, listing_id: int):
     user = me(request)
@@ -518,25 +672,25 @@ def listing_pay_publish(request: Request, listing_id: int):
         return listing_detail(request, listing_id)
     fee = _publish_fee()
     base = _public_base(request)
-    from stripe_pay import create_checkout
-
     try:
-        sess = create_checkout(
+        sess = stripe_pay.create_publish_checkout(
             amount_usd=fee,
-            name=f"Publicar en MotorCriollo — {(listing.get('title') or '')[:50]}",
-            description="Pago para publicar el anuncio (Binance Card Venezuela, tarjeta o USDC)",
+            listing_id=listing_id,
+            title=listing.get("title") or "",
             success_url=f"{base}/listing/{listing_id}/publicado-ok?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{base}/listing/{listing_id}",
-            metadata={"kind": "publish", "listing_id": str(listing_id)},
         )
-    except Exception:
+    except Exception as e:
+        print(f"[stripe] checkout publicar falló: {type(e).__name__}")
         return _page(
             request, "listing.html", listing=listing,
             seller=get_user(listing["user_id"]),
             error="No se pudo abrir Stripe. Intenta de nuevo.",
             share=_share(request, listing),
         )
-    update_listing(listing_id, stripe_publish_session=sess["id"])
+    update_listing(
+        listing_id, stripe_publish_session=sess["id"], publish_cents=sess["amount_cents"]
+    )
     return RedirectResponse(sess["url"], status_code=303)
 
 
@@ -547,27 +701,57 @@ def listing_publish_ok(request: Request, listing_id: int, session_id: str = ""):
     if not listing or not user or int(user["id"]) != int(listing["user_id"]):
         return RedirectResponse("/login", status_code=302)
     sid = (session_id or "").strip()
-    if not sid:
+    if not sid or sid != (listing.get("stripe_publish_session") or ""):
         return RedirectResponse(f"/listing/{listing_id}", status_code=303)
-    from stripe_pay import retrieve_session
-
     try:
-        sess = retrieve_session(sid)
+        sess = stripe_pay.retrieve_session(sid)
     except Exception:
         return listing_detail(request, listing_id)
-    paid = bool(sess) and str(getattr(sess, "payment_status", "") or "") == "paid"
-    if not paid:
-        return listing_detail(request, listing_id)
-    meta = dict(getattr(sess, "metadata", None) or {})
-    if str(meta.get("listing_id") or "") not in ("", str(listing_id)):
-        return listing_detail(request, listing_id)
-    update_listing(
-        listing_id,
-        status="active",
-        publish_paid=1,
-        stripe_publish_session=sid,
-    )
+    ok, why = _fulfill_publish(listing, sess)
+    if not ok:
+        print(f"[stripe] publicar {listing_id} rechazado: {why}")
     return RedirectResponse(f"/listing/{listing_id}", status_code=303)
+
+
+@app.post("/stripe/webhook")
+async def stripe_webhook(request: Request):
+    """Webhook de Stripe (firma verificada con STRIPE_WEBHOOK_SECRET)."""
+    if not stripe_webhook_secret():
+        return JSONResponse({"ok": False, "error": "webhook no configurado"}, status_code=503)
+    payload = await request.body()
+    try:
+        event = stripe_pay.construct_webhook_event(
+            payload, request.headers.get("stripe-signature") or ""
+        )
+    except Exception:
+        return JSONResponse({"ok": False, "error": "firma inválida"}, status_code=400)
+    etype = str(stripe_pay._get(event, "type") or "")
+    if etype not in ("checkout.session.completed", "checkout.session.async_payment_succeeded"):
+        return {"ok": True, "ignored": etype}
+    data = stripe_pay._get(event, "data") or {}
+    sess = stripe_pay._get(data, "object")
+    meta = stripe_pay.session_metadata(sess)
+    if meta.get("app") != stripe_pay.APP_TAG:
+        return {"ok": True, "ignored": "otra app"}
+    kind = meta.get("kind")
+    try:
+        if kind == stripe_pay.KIND_PUBLISH:
+            listing = get_listing(int(meta.get("listing_id") or 0))
+            if not listing:
+                return {"ok": True, "ignored": "anuncio no existe"}
+            ok, why = _fulfill_publish(listing, sess)
+        elif kind == stripe_pay.KIND_COMMISSION:
+            deal = get_deal(int(meta.get("deal_id") or 0))
+            if not deal:
+                return {"ok": True, "ignored": "venta no existe"}
+            ok, why, _ = _fulfill_commission(deal, sess)
+        else:
+            return {"ok": True, "ignored": "tipo desconocido"}
+    except (TypeError, ValueError):
+        return {"ok": True, "ignored": "metadata inválida"}
+    if not ok:
+        print(f"[stripe] webhook {kind} rechazado: {why}")
+    return {"ok": True, "applied": ok}
 
 
 @app.post("/listing/{listing_id}/comprobante-publicar")
@@ -578,12 +762,18 @@ async def listing_publish_proof(request: Request, listing_id: int, proof: Upload
         return RedirectResponse("/login", status_code=302)
     if listing.get("status") != "pending_pay":
         return RedirectResponse(f"/listing/{listing_id}", status_code=303)
-    path = await _save_photo(listing_id, proof)
+    try:
+        path = await _save_photo(listing_id, proof, private=True)
+    except ValueError as e:
+        path = ""
+        err = str(e)
+    else:
+        err = "Sube una foto o captura del pago de publicación"
     if not path:
         return _page(
             request, "listing.html", listing=listing,
             seller=get_user(listing["user_id"]),
-            error="Sube una foto o captura del pago de publicación",
+            error=err,
             share=_share(request, listing),
         )
     update_listing(listing_id, publish_proof=path)
@@ -601,6 +791,15 @@ def reportar_listing(
     if not listing:
         return RedirectResponse("/", status_code=302)
     user = me(request)
+    ip = client_ip(request)
+    if not rl_allow("report_ip", ip) or not rl_allow("report_listing_ip", f"{ip}:{listing_id}"):
+        resp = _page(
+            request, "listing.html", listing=listing, seller=get_user(listing["user_id"]),
+            reported=True, share=_share(request, listing),
+            reputation=seller_reputation(listing["user_id"]) if listing.get("user_id") else {},
+        )
+        resp.status_code = 429
+        return resp
     add_report(
         listing_id,
         reason=reason,
@@ -621,7 +820,11 @@ def chat_start(request: Request, listing_id: int):
     if not user:
         return RedirectResponse(f"/login?next=/chat/{listing_id}", status_code=302)
     listing = get_listing(listing_id)
-    if not listing or listing.get("status") == "pending_pay":
+    if (
+        not listing
+        or listing.get("status") == "pending_pay"
+        or (int(listing.get("is_demo") or 0) and not _show_demo())
+    ):
         return _page(request, "listing_missing.html", listing_id=listing_id)
     if int(user["id"]) == int(listing["user_id"]):
         return RedirectResponse("/mensajes", status_code=302)
@@ -650,6 +853,10 @@ def api_chat_send(request: Request, cid: int, body: str = Form(...)):
     user = me(request)
     if not user:
         return JSONResponse({"ok": False}, status_code=401)
+    if not _chat_allowed(user):
+        return JSONResponse(
+            {"ok": False, "error": "Vas muy rápido. Espera un momento."}, status_code=429
+        )
     try:
         msg = add_chat_message(cid, user["id"], body)
     except ValueError as e:
@@ -659,7 +866,11 @@ def api_chat_send(request: Request, cid: int, body: str = Form(...)):
         other_id = convo["seller_id"] if int(user["id"]) == int(convo["buyer_id"]) else convo["buyer_id"]
         other = get_user(other_id)
         listing = get_listing(convo["listing_id"])
-        if other and other.get("email") and not str(other.get("email") or "").endswith("@demo.motorcriollo"):
+        if (
+            other and other.get("email")
+            and not str(other.get("email") or "").endswith("@demo.motorcriollo")
+            and rl_allow("chat_mail", f"{cid}:{other_id}")
+        ):
             _queue_mail(
                 send_chat_notice,
                 other["email"],
@@ -699,7 +910,7 @@ def city_page(request: Request, slug: str):
     if not found:
         return RedirectResponse("/#publicaciones", status_code=302)
     _slug, city, state = found
-    show_demo = not hide_demo_now()
+    show_demo = _show_demo()
     listings = browse_listings(city=city, include_demo=show_demo, limit=60)
     state_slug = next((s[0] for s in VE_STATE_CITIES if s[1] == state), "")
     return _page(
@@ -715,7 +926,7 @@ def estado_page(request: Request, state_slug: str):
     if not found:
         return RedirectResponse("/#publicaciones", status_code=302)
     _sslug, state, cities = found
-    show_demo = not hide_demo_now()
+    show_demo = _show_demo()
     listings = browse_listings(state=state, include_demo=show_demo, limit=60)
     base = _public_base(request)
     return _page(
@@ -780,6 +991,8 @@ def chat_send(request: Request, cid: int, body: str = Form(...)):
     user = me(request)
     if not user:
         return RedirectResponse("/login", status_code=302)
+    if not _chat_allowed(user):
+        return chat_view(request, cid, error="Vas muy rápido. Espera un momento.")
     try:
         add_chat_message(cid, user["id"], body)
     except ValueError:
@@ -789,7 +1002,11 @@ def chat_send(request: Request, cid: int, body: str = Form(...)):
         other_id = convo["seller_id"] if int(user["id"]) == int(convo["buyer_id"]) else convo["buyer_id"]
         other = get_user(other_id)
         listing = get_listing(convo["listing_id"])
-        if other and other.get("email") and not str(other.get("email") or "").endswith("@demo.motorcriollo"):
+        if (
+            other and other.get("email")
+            and not str(other.get("email") or "").endswith("@demo.motorcriollo")
+            and rl_allow("chat_mail", f"{cid}:{other_id}")
+        ):
             _queue_mail(
                 send_chat_notice,
                 other["email"],
@@ -827,7 +1044,10 @@ async def chat_proof(request: Request, cid: int, proof: UploadFile = File(None))
     deal = get_deal_by_conversation(cid)
     if not convo or not deal or int(user["id"]) != int(convo["seller_id"]):
         return RedirectResponse("/mensajes", status_code=302)
-    path = await _save_photo(deal["listing_id"], proof)
+    try:
+        path = await _save_photo(deal["listing_id"], proof, private=True)
+    except ValueError as e:
+        return chat_view(request, cid, error=str(e))
     if not path:
         return chat_view(request, cid, error="Sube una foto o captura del pago")
     set_deal_proof(deal["id"], path)
@@ -857,10 +1077,8 @@ def chat_pay_stripe(request: Request, cid: int):
         return RedirectResponse(f"/c/{cid}", status_code=303)
     listing = get_listing(convo["listing_id"]) or {}
     base = _public_base(request)
-    from stripe_pay import create_commission_checkout
-
     try:
-        sess = create_commission_checkout(
+        sess = stripe_pay.create_commission_checkout(
             amount_usd=int(deal["commission"]),
             deal_id=int(deal["id"]),
             conversation_id=cid,
@@ -869,7 +1087,8 @@ def chat_pay_stripe(request: Request, cid: int):
             cancel_url=f"{base}/c/{cid}?pago=0",
         )
     except Exception as e:
-        return chat_view(request, cid, error=f"Stripe: {type(e).__name__}")
+        print(f"[stripe] checkout comisión falló: {type(e).__name__}")
+        return chat_view(request, cid, error="No se pudo abrir Stripe. Intenta de nuevo.")
     set_deal_stripe_session(deal["id"], sess["id"])
     return RedirectResponse(sess["url"], status_code=303)
 
@@ -889,24 +1108,16 @@ def chat_pay_ok(request: Request, cid: int, session_id: str = ""):
     sid = (session_id or "").strip()
     if not sid:
         return chat_view(request, cid, error="Falta el pago de Stripe")
-    from stripe_pay import retrieve_session
-
+    if sid != (deal.get("stripe_session_id") or ""):
+        return chat_view(request, cid, error="Ese pago no corresponde a esta venta")
     try:
-        sess = retrieve_session(sid)
+        sess = stripe_pay.retrieve_session(sid)
     except Exception:
         return chat_view(request, cid, error="No se pudo verificar el pago")
-    paid = bool(sess) and str(getattr(sess, "payment_status", "") or "") == "paid"
-    if not paid:
-        return chat_view(request, cid, error="El pago no está confirmado todavía")
-    meta = dict(getattr(sess, "metadata", None) or {})
-    if str(meta.get("deal_id") or "") not in ("", str(deal["id"])):
-        return chat_view(request, cid, error="Ese pago no corresponde a esta venta")
-    set_deal_stripe_session(deal["id"], sid)
-    confirm_deal_paid(deal["id"], pay_method="stripe")
-    add_chat_message(
-        cid, user["id"],
-        f"Comisión de ${deal['commission']} pagada con Stripe. Venta cerrada.",
-    )
+    ok, why, _first = _fulfill_commission(deal, sess)
+    if not ok:
+        print(f"[stripe] comisión deal {deal['id']} rechazada: {why}")
+        return chat_view(request, cid, error="El pago no está confirmado o no corresponde a esta venta")
     return RedirectResponse(f"/c/{cid}", status_code=303)
 
 
@@ -999,8 +1210,8 @@ async def publicar_post(
         )
         await _save_listing_photos(listing["id"], photos)
         odo = await _save_photo(listing["id"], photo_odometer)
-        ser = await _save_photo(listing["id"], photo_serial)
-        tit = await _save_photo(listing["id"], photo_title)
+        ser = await _save_photo(listing["id"], photo_serial, private=True)
+        tit = await _save_photo(listing["id"], photo_title, private=True)
         if not (odo and ser and tit):
             return _page(
                 request, "publicar.html", listing=listing,
@@ -1060,8 +1271,8 @@ async def editar_post(
         await _save_listing_photos(listing_id, photos)
         docs = {}
         odo = await _save_photo(listing_id, photo_odometer)
-        ser = await _save_photo(listing_id, photo_serial)
-        tit = await _save_photo(listing_id, photo_title)
+        ser = await _save_photo(listing_id, photo_serial, private=True)
+        tit = await _save_photo(listing_id, photo_title, private=True)
         if odo:
             docs["photo_odometer"] = odo
         if ser:
@@ -1094,7 +1305,9 @@ def eliminar_listing(request: Request, listing_id: int):
     listing = get_listing(listing_id)
     if not listing or not user or user["id"] != listing["user_id"]:
         return RedirectResponse("/login", status_code=302)
+    files = listing_file_paths(listing_id)
     delete_listing(listing_id)
+    _remove_files(files)
     return RedirectResponse("/mis-publicaciones", status_code=303)
 
 
@@ -1177,6 +1390,8 @@ def registro_post(
     state: str = Form(""),
     next: str = Form(""),
 ):
+    if not rl_allow("signup_ip", client_ip(request)):
+        return _too_many(request, "registro.html", next=next)
     try:
         user = create_user(
             email=email, password=password, name=name, phone=phone, city=city, state=state,
@@ -1199,6 +1414,9 @@ def login_get(request: Request, next: str = ""):
 
 @app.post("/login")
 def login_post(request: Request, email: str = Form(...), password: str = Form(...), next: str = Form("")):
+    em = (email or "").strip().lower()[:254]
+    if not rl_allow("login_ip", client_ip(request)) or not rl_allow("login_email", em):
+        return _too_many(request, "login.html", next=next)
     user = login(email, password)
     if not user:
         return _page(request, "login.html", error="Email o contraseña incorrectos", next=next)
@@ -1217,10 +1435,18 @@ def privacidad(request: Request):
     return _page(request, "privacidad.html")
 
 
-@app.get("/salir")
+@app.get("/salir", response_class=HTMLResponse)
+def salir_get(request: Request):
+    # GET ya no cierra sesión (evita CSRF por enlace); muestra el botón.
+    if not me(request):
+        return RedirectResponse("/", status_code=302)
+    return _page(request, "salir.html")
+
+
+@app.post("/salir")
 def salir(request: Request):
     delete_session(request.cookies.get(SESSION_COOKIE))
-    resp = RedirectResponse("/", status_code=302)
+    resp = RedirectResponse("/", status_code=303)
     resp.delete_cookie(SESSION_COOKIE)
     return resp
 
@@ -1230,8 +1456,7 @@ def auth_google(request: Request, next: str = ""):
     if not google_enabled():
         return _page(
             request, "login.html",
-            error="Falta el ID de Google. En Render → MotorCriollo → Environment pega "
-                  "MOTORCRIOLLO_GOOGLE_CLIENT_ID y MOTORCRIOLLO_GOOGLE_CLIENT_SECRET.",
+            error="El inicio de sesión con Google no está disponible ahora.",
         )
     state = secrets.token_urlsafe(24)
     url = google_authorize_url(f"{_base(request)}/auth/google/callback", state)
@@ -1246,7 +1471,7 @@ def auth_google(request: Request, next: str = ""):
 @app.get("/auth/google/callback")
 def auth_google_cb(request: Request, code: str = "", state: str = "", error: str = ""):
     if error:
-        return _page(request, "login.html", error=f"Google: {error}")
+        return _page(request, "login.html", error="Google canceló o rechazó el inicio de sesión.")
     saved = request.cookies.get(OAUTH_STATE_COOKIE)
     if not code or not saved or saved != state:
         return _page(request, "login.html", error="Sesión de Google inválida. Intenta de nuevo.")
@@ -1255,8 +1480,11 @@ def auth_google_cb(request: Request, code: str = "", state: str = "", error: str
         user, is_new = upsert_oauth_user(
             email=info["email"], name=info["name"], provider="google", oauth_id=info["oauth_id"],
         )
+    except UnverifiedAccountError as e:
+        return _page(request, "login.html", error=str(e))
     except Exception as e:
-        return _page(request, "login.html", error=f"Google no conectó: {e}")
+        print(f"[oauth] google falló: {type(e).__name__}")
+        return _page(request, "login.html", error="No se pudo entrar con Google. Intenta de nuevo.")
     return _finish_oauth(request, user, is_new)
 
 
@@ -1265,7 +1493,7 @@ def auth_apple(request: Request):
     if not apple_enabled():
         return _page(
             request, "login.html",
-            error="Falta configurar Apple. Pega APPLE_CLIENT_ID, TEAM, KEY y el archivo .p8 en config_local.py",
+            error="El inicio de sesión con Apple no está disponible.",
         )
     state = secrets.token_urlsafe(24)
     url = apple_authorize_url(f"{_base(request)}/auth/apple/callback", state)
@@ -1282,7 +1510,7 @@ async def auth_apple_cb(request: Request):
     user_json = str(form.get("user") or "")
     err = str(form.get("error") or "")
     if err:
-        return _page(request, "login.html", error=f"Apple: {err}")
+        return _page(request, "login.html", error="Apple canceló o rechazó el inicio de sesión.")
     saved = request.cookies.get(OAUTH_STATE_COOKIE)
     if not code or not saved or saved != state:
         return _page(request, "login.html", error="Sesión de Apple inválida. Intenta de nuevo.")
@@ -1291,8 +1519,11 @@ async def auth_apple_cb(request: Request):
         user, is_new = upsert_oauth_user(
             email=info["email"], name=info["name"], provider="apple", oauth_id=info["oauth_id"],
         )
+    except UnverifiedAccountError as e:
+        return _page(request, "login.html", error=str(e))
     except Exception as e:
-        return _page(request, "login.html", error=f"Apple no conectó: {e}")
+        print(f"[oauth] apple falló: {type(e).__name__}")
+        return _page(request, "login.html", error="No se pudo entrar con Apple. Intenta de nuevo.")
     return _finish_oauth(request, user, is_new)
 
 
@@ -1315,7 +1546,8 @@ def correo_reenviar(request: Request):
     user = me(request)
     if not user:
         return RedirectResponse("/login", status_code=302)
-    _queue_verify_email(user)
+    if rl_allow("verify_mail_user", str(user["id"])):
+        _queue_verify_email(user)
     return RedirectResponse("/mis-publicaciones", status_code=303)
 
 
@@ -1326,7 +1558,12 @@ def olvide_get(request: Request):
 
 @app.post("/olvide")
 def olvide_post(request: Request, email: str = Form(...)):
-    row = get_user_by_email(email)
+    em = (email or "").strip().lower()[:254]
+    if not rl_allow("forgot_ip", client_ip(request)):
+        return _too_many(request, "olvide.html")
+    row = get_user_by_email(em) if rl_allow("forgot_email", em) else None
+    if row and int(getv_row(row, "is_demo") or 0):
+        row = None
     if row:
         uid = row["id"] if not isinstance(row, dict) else row.get("id")
         user = get_user(uid)
@@ -1349,13 +1586,20 @@ def reset_get(request: Request, token: str = ""):
 
 @app.post("/reset")
 def reset_post(request: Request, token: str = Form(...), password: str = Form(...)):
+    if len(password or "") < PASSWORD_MIN_LEN:
+        return _page(
+            request, "reset.html", token=token,
+            error=f"La contraseña debe tener al menos {PASSWORD_MIN_LEN} caracteres",
+        )
     uid = take_email_token(token, "reset")
     if not uid:
         return _page(request, "olvide.html", error="El enlace no vale o ya se usó.")
     try:
-        set_password(uid, password)
+        set_password(uid, password)  # también cierra todas las sesiones del usuario
     except ValueError as e:
-        return _page(request, "reset.html", token=token, error=str(e))
+        # El token ya se consumió: hay que pedir otro enlace.
+        return _page(request, "olvide.html", error=f"{e}. Pide un enlace nuevo.")
+    update_profile(uid, email_verified=1)
     return _page(request, "login.html", info="ok")
 
 
@@ -1364,10 +1608,23 @@ def eliminar_cuenta(request: Request):
     user = me(request)
     if not user:
         return RedirectResponse("/", status_code=302)
+    files = user_file_paths(user["id"])
     delete_user(user["id"])
-    resp = RedirectResponse("/", status_code=302)
+    _remove_files(files)
+    resp = RedirectResponse("/", status_code=303)
     resp.delete_cookie(SESSION_COOKIE)
     return resp
+
+
+def getv_row(row, key):
+    if row is None:
+        return None
+    if isinstance(row, dict):
+        return row.get(key)
+    try:
+        return row[key]
+    except Exception:
+        return None
 
 
 def _require_admin(request: Request):
@@ -1385,9 +1642,17 @@ def admin_login_get(request: Request):
 
 @app.post("/admin/entrar")
 def admin_login_post(request: Request, password: str = Form(...)):
+    ip = client_ip(request)
+    if rl_blocked("admin_ip", ip) or rl_blocked("admin_global", "all"):
+        return _too_many(request, "admin_login.html", "Panel bloqueado por intentos fallidos. Espera 15 minutos.")
     want = admin_password()
-    if not want or password != want:
+    if not want:
+        return _page(request, "admin_login.html", error="El panel está cerrado: falta configurar MOTORCRIOLLO_ADMIN (12+ caracteres).")
+    if not hmac.compare_digest((password or "").encode("utf-8"), want.encode("utf-8")):
+        rl_allow("admin_ip", ip)
+        rl_allow("admin_global", "all")
         return _page(request, "admin_login.html", error="Clave incorrecta")
+    limiter.reset(f"admin_ip:{ip}")
     token = create_admin_session(7)
     resp = RedirectResponse("/admin", status_code=303)
     resp.set_cookie(
@@ -1401,10 +1666,10 @@ def admin_login_post(request: Request, password: str = Form(...)):
     return resp
 
 
-@app.get("/admin/salir")
+@app.post("/admin/salir")
 def admin_logout(request: Request):
     delete_admin_session(request.cookies.get(ADMIN_COOKIE))
-    resp = RedirectResponse("/admin/entrar", status_code=302)
+    resp = RedirectResponse("/admin/entrar", status_code=303)
     resp.delete_cookie(ADMIN_COOKIE)
     return resp
 
@@ -1591,26 +1856,32 @@ def admin_listing_delete(request: Request, listing_id: int):
     gate = _require_admin(request)
     if gate:
         return gate
+    files = listing_file_paths(listing_id)
     delete_listing(listing_id)
+    _remove_files(files)
     return RedirectResponse("/admin?tab=listings", status_code=303)
 
 
 @app.api_route("/api/health", methods=["GET", "HEAD"])
 def health():
-    from db import backend_name
+    return {"ok": True}
 
-    return {
-        "ok": True,
-        "app": "MotorCriollo",
-        "backend": backend_name(),
-        "persistent": PERSISTENT,
-        "google": google_enabled(),
-        "email": email_status(),
-        "listings": count_active_listings(),
-        "users": count_users(),
-        "kyc_pending": count_kyc_pending(),
-        "stripe": {"configured": stripe_enabled(), "mode": stripe_mode()},
-    }
+
+@app.get("/privado/{fname}")
+def private_file(request: Request, fname: str):
+    """Documentos del carro y comprobantes: solo el dueño del anuncio y administración."""
+    m = _PRIVATE_NAME.match(fname or "")
+    if not m:
+        raise HTTPException(status_code=404)
+    listing = get_listing(int(m.group(1)))
+    user = me(request)
+    owner = bool(listing and user and int(user["id"]) == int(listing["user_id"]))
+    if not (owner or _admin(request)):
+        raise HTTPException(status_code=404)
+    path = os.path.join(PRIVATE_DIR, fname)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404)
+    return FileResponse(path, headers={"Cache-Control": "private, no-store"})
 
 
 if __name__ == "__main__":

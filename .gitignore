@@ -11,3 +11,5 @@ static/uploads/*
 !static/uploads/.gitkeep
 .DS_Store
 *.p8
+data/private/
+.pytest_cache/

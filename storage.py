@@ -9,6 +9,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
+from config import PASSWORD_MIN_LEN
 from db import USE_PG, connect, execute, getv, insert_id, insert_ignore, integrity_error
 
 TZ = timezone.utc
@@ -177,6 +178,11 @@ def init_db() -> None:
             listing_id INTEGER NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
             created_at TEXT NOT NULL,
             PRIMARY KEY (user_id, listing_id))""",
+        """CREATE TABLE IF NOT EXISTS stripe_payments (
+            session_id TEXT PRIMARY KEY,
+            kind TEXT NOT NULL,
+            target_id INTEGER NOT NULL,
+            used_at TEXT NOT NULL)""",
         """CREATE TABLE IF NOT EXISTS conversation_reads (
             conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
             user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -224,6 +230,7 @@ def init_db() -> None:
         ("publish_paid", "INTEGER DEFAULT 0"),
         ("stripe_publish_session", "TEXT DEFAULT ''"),
         ("publish_proof", "TEXT DEFAULT ''"),
+        ("publish_cents", "INTEGER DEFAULT 0"),
     ):
         try:
             con.execute(f"ALTER TABLE listings ADD COLUMN {col} {decl}")
@@ -300,8 +307,10 @@ def create_user(
 ) -> dict[str, Any]:
     email = email.strip().lower()
     name = (name or "").strip()[:60]
-    if "@" not in email or len(password) < 4:
-        raise ValueError("Email o contraseña inválidos")
+    if "@" not in email or len(email) > 254:
+        raise ValueError("Email inválido")
+    if not is_demo and len(password or "") < PASSWORD_MIN_LEN:
+        raise ValueError(f"La contraseña debe tener al menos {PASSWORD_MIN_LEN} caracteres")
     if not name:
         raise ValueError("Pon tu nombre")
     con = connect()
@@ -350,6 +359,10 @@ def get_user_by_email(email: str) -> Any:
     return r
 
 
+class UnverifiedAccountError(ValueError):
+    pass
+
+
 def upsert_oauth_user(
     *, email: str, name: str, provider: str, oauth_id: str
 ) -> tuple[dict[str, Any], bool]:
@@ -371,6 +384,17 @@ def upsert_oauth_user(
     row = execute(con, "SELECT * FROM users WHERE email=?", (email,)).fetchone()
     if row:
         uid = getv(row, "id")
+        if int(getv(row, "is_demo") or 0):
+            con.close()
+            raise UnverifiedAccountError("Esa cuenta no admite inicio de sesión.")
+        if not int(getv(row, "email_verified") or 0):
+            # Alguien pudo registrar este correo sin verificarlo: no lo unimos
+            # automáticamente (evita robo de cuenta pre-registrada).
+            con.close()
+            raise UnverifiedAccountError(
+                "Ya existe una cuenta con este correo que no está verificada. "
+                "Entra con tu contraseña y confirma el correo, o usa «Olvidé mi contraseña»."
+            )
         insert_ignore(
             con,
             "INSERT OR IGNORE INTO oauth_links(user_id, provider, oauth_id) VALUES(?,?,?)",
@@ -420,6 +444,8 @@ def login(email: str, password: str) -> dict[str, Any] | None:
     row = get_user_by_email(email)
     if not row or not check_password(password, row["password_hash"]):
         return None
+    if int(getv(row, "is_demo") or 0):
+        return None
     touch(row["id"])
     return get_user(row["id"])
 
@@ -456,22 +482,108 @@ def update_profile(user_id: int, **fields) -> dict[str, Any] | None:
 
 
 def set_password(user_id: int, password: str) -> None:
-    if len(password or "") < 4:
-        raise ValueError("Contraseña muy corta")
+    """Cambia la contraseña y cierra TODAS las sesiones del usuario."""
+    if len(password or "") < PASSWORD_MIN_LEN:
+        raise ValueError(f"La contraseña debe tener al menos {PASSWORD_MIN_LEN} caracteres")
     con = connect()
     execute(
         con,
         "UPDATE users SET password_hash=? WHERE id=?",
         (hash_password(password), int(user_id)),
     )
+    execute(con, "DELETE FROM sessions WHERE user_id=?", (int(user_id),))
+    execute(con, "DELETE FROM email_tokens WHERE user_id=? AND kind='reset'", (int(user_id),))
     con.commit()
     con.close()
 
 
-def delete_user(user_id: int) -> None:
+def delete_user_sessions(user_id: int) -> None:
     con = connect()
-    execute(con, "DELETE FROM sessions WHERE user_id=?", (user_id,))
-    execute(con, "DELETE FROM users WHERE id=?", (user_id,))
+    execute(con, "DELETE FROM sessions WHERE user_id=?", (int(user_id),))
+    con.commit()
+    con.close()
+
+
+def lock_demo_accounts() -> int:
+    """Deja inservibles las cuentas demo: clave aleatoria, sin verificación, sin sesiones."""
+    con = connect()
+    rows = execute(con, "SELECT id FROM users WHERE is_demo=1").fetchall()
+    ids = [int(getv(r, "id")) for r in rows]
+    for uid in ids:
+        execute(
+            con,
+            """UPDATE users SET password_hash=?, kyc_status='none'
+               WHERE id=?""",
+            (hash_password(secrets.token_urlsafe(32)), uid),
+        )
+        execute(con, "DELETE FROM sessions WHERE user_id=?", (uid,))
+        execute(con, "DELETE FROM email_tokens WHERE user_id=?", (uid,))
+    con.commit()
+    con.close()
+    return len(ids)
+
+
+def user_file_paths(user_id: int) -> list[str]:
+    """Rutas de archivos subidos por el usuario (fotos, documentos, comprobantes, KYC)."""
+    con = connect()
+    paths: list[str] = []
+    for r in execute(
+        con,
+        """SELECT p.path FROM listing_photos p JOIN listings l ON l.id=p.listing_id
+           WHERE l.user_id=?""",
+        (int(user_id),),
+    ).fetchall():
+        paths.append(getv(r, "path") or "")
+    for r in execute(
+        con,
+        "SELECT photo_odometer, photo_serial, photo_title, publish_proof FROM listings WHERE user_id=?",
+        (int(user_id),),
+    ).fetchall():
+        for k in ("photo_odometer", "photo_serial", "photo_title", "publish_proof"):
+            paths.append(getv(r, k) or "")
+    for r in execute(
+        con, "SELECT proof_path FROM deals WHERE seller_id=?", (int(user_id),)
+    ).fetchall():
+        paths.append(getv(r, "proof_path") or "")
+    r = execute(
+        con, "SELECT kyc_id_photo, kyc_address_photo FROM users WHERE id=?", (int(user_id),)
+    ).fetchone()
+    if r:
+        for k in ("kyc_id_photo", "kyc_address_photo"):
+            v = getv(r, k) or ""
+            if v:
+                paths.append("kyc:" + v)
+    con.close()
+    return [p for p in paths if p]
+
+
+def listing_file_paths(listing_id: int) -> list[str]:
+    l = get_listing(listing_id)
+    if not l:
+        return []
+    paths = list(l.get("photos") or [])
+    for k in ("photo_odometer", "photo_serial", "photo_title", "publish_proof"):
+        if l.get(k):
+            paths.append(l[k])
+    return paths
+
+
+def delete_user(user_id: int) -> None:
+    """Borra la cuenta y sus anuncios (y lo que cuelga de ellos)."""
+    con = connect()
+    uid = int(user_id)
+    execute(con, "DELETE FROM sessions WHERE user_id=?", (uid,))
+    execute(con, "DELETE FROM email_tokens WHERE user_id=?", (uid,))
+    execute(con, "DELETE FROM oauth_links WHERE user_id=?", (uid,))
+    execute(con, "DELETE FROM favorites WHERE user_id=?", (uid,))
+    lids = [int(getv(r, "id")) for r in execute(
+        con, "SELECT id FROM listings WHERE user_id=?", (uid,)
+    ).fetchall()]
+    for lid in lids:
+        execute(con, "DELETE FROM listing_photos WHERE listing_id=?", (lid,))
+        execute(con, "DELETE FROM favorites WHERE listing_id=?", (lid,))
+    execute(con, "DELETE FROM listings WHERE user_id=?", (uid,))
+    execute(con, "DELETE FROM users WHERE id=?", (uid,))
     con.commit()
     con.close()
 
@@ -505,8 +617,11 @@ def user_from_session(token: str | None) -> dict[str, Any] | None:
     if not r:
         return None
     uid = getv(r, "user_id")
+    user = get_user(uid)
+    if not user or int(user.get("is_demo") or 0):
+        return None
     touch(uid)
-    return get_user(uid)
+    return user
 
 
 def delete_session(token: str | None) -> None:
@@ -653,7 +768,7 @@ def update_listing(listing_id: int, **fields) -> dict[str, Any] | None:
         "title", "brand", "model", "year", "price", "mileage", "transmission",
         "fuel_type", "condition", "description", "city", "state", "phone", "status",
         "photo_odometer", "photo_serial", "photo_title", "inspected",
-        "publish_paid", "stripe_publish_session", "publish_proof",
+        "publish_paid", "stripe_publish_session", "publish_proof", "publish_cents",
     }
     sets, vals = [], []
     for k, v in fields.items():
@@ -675,7 +790,7 @@ def update_listing(listing_id: int, **fields) -> dict[str, Any] | None:
             v = (v or "")[:60]
         if k == "phone":
             v = (v or "")[:30]
-        if k in ("year", "price", "mileage", "inspected", "publish_paid"):
+        if k in ("year", "price", "mileage", "inspected", "publish_paid", "publish_cents"):
             v = int(v or 0)
         if k in ("photo_odometer", "photo_serial", "photo_title", "stripe_publish_session", "publish_proof"):
             v = (v or "")[:220]
@@ -1259,7 +1374,7 @@ def can_publish(user: dict[str, Any] | None) -> bool:
     if not user:
         return False
     if user.get("is_demo"):
-        return True
+        return False
     return (user.get("kyc_status") or "none") == "approved"
 
 
@@ -1662,3 +1777,36 @@ def count_unread(user_id: int) -> int:
         n += int(getv(row, "n") or 0)
     con.close()
     return n
+
+
+# ----------------------------------------------------------- stripe once ----
+
+def claim_stripe_session(session_id: str, kind: str, target_id: int) -> tuple[bool, bool]:
+    """Marca una sesión de Stripe como usada.
+
+    Devuelve (ok, nueva): ok=False si la sesión ya se usó para OTRO pago;
+    nueva=False si ya se había usado para este mismo pago (idempotente: webhook + retorno).
+    """
+    sid = (session_id or "").strip()[:200]
+    if not sid:
+        return False, False
+    con = connect()
+    row = execute(
+        con, "SELECT kind, target_id FROM stripe_payments WHERE session_id=?", (sid,)
+    ).fetchone()
+    if row:
+        con.close()
+        same = getv(row, "kind") == kind and int(getv(row, "target_id") or 0) == int(target_id)
+        return same, False
+    try:
+        execute(
+            con,
+            "INSERT INTO stripe_payments(session_id, kind, target_id, used_at) VALUES(?,?,?,?)",
+            (sid, kind, int(target_id), _now()),
+        )
+        con.commit()
+    except integrity_error():
+        con.close()
+        return claim_stripe_session(sid, kind, target_id)
+    con.close()
+    return True, True

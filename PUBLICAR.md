@@ -144,3 +144,26 @@ En Environment de **MotorCriollo**:
 Callback de Google:
 
 `https://TU-URL-DE-MOTORCRIOLLO/auth/google/callback`
+
+## Seguridad (variables y Stripe)
+
+Variables en Render → motorcriollo → Environment:
+
+| Variable | Para qué |
+|---|---|
+| `MOTORCRIOLLO_ADMIN` | Clave del panel `/admin` (**mínimo 12 caracteres**). Sin ella el panel queda cerrado. |
+| `STRIPE_WEBHOOK_SECRET` | Secreto `whsec_...` del webhook de Stripe (ver abajo). |
+| `MOTORCRIOLLO_DEMO` | `1` solo si quieres mostrar los carros demo. Por defecto en producción están apagados. |
+| `SENDGRID_FROM_EMAIL` | Remitente (por defecto `soporte@motorcriollo.store`, debe estar autenticado en SendGrid). |
+| `SENDGRID_FROM_FALLBACK` | Opcional. Remitente de respaldo; ya no hay uno por defecto. |
+
+Webhook de Stripe: Dashboard → Developers → Webhooks → **Add endpoint**
+
+- URL: `https://motorcriollo.store/stripe/webhook`
+- Eventos: `checkout.session.completed` y `checkout.session.async_payment_succeeded`
+- Copia el *Signing secret* (`whsec_...`) a `STRIPE_WEBHOOK_SECRET`.
+
+Sin el webhook los pagos igual se confirman al volver de Stripe (verificación estricta),
+pero con el webhook se confirman aunque el cliente cierre la pestaña.
+
+Tests: `pip install pytest httpx && python -m pytest -q tests`
